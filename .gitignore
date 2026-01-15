@@ -1,0 +1,27 @@
+# Node / Next
+node_modules/
+.next/
+dist/
+build/
+
+# Logs / pids
+*.log
+*.pid
+**/dev.log
+**/dev.pid
+
+# Env files (ignore all .env* everywhere)
+.env*
+**/.env*
+
+# Docs (do not commit)
+/docs/
+
+# Supabase CLI
+supabase/.temp/
+.supabase/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
