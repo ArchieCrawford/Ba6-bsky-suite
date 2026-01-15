@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import type { Request, Response } from "express";
 import { z } from "zod";
 import { supa } from "./supa.js";
 
@@ -121,7 +122,7 @@ async function queryPosts(params: {
 
 const app = express();
 
-app.get("/xrpc/app.bsky.feed.getFeedSkeleton", async (req, res) => {
+app.get("/xrpc/app.bsky.feed.getFeedSkeleton", async (req: Request, res: Response) => {
   try {
     const parsed = qSchema.parse(req.query);
     const slug = parsed.feed;
@@ -157,7 +158,7 @@ app.get("/xrpc/app.bsky.feed.getFeedSkeleton", async (req, res) => {
   }
 });
 
-app.get("/health", (_req, res) => res.json({ ok: true }));
+app.get("/health", (_req: Request, res: Response) => res.json({ ok: true }));
 
 app.listen(PORT, () => {
   process.stdout.write(`feedgen listening on ${PORT}\n`);
