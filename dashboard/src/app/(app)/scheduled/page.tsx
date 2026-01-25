@@ -7,7 +7,6 @@ import { Card } from "@/components/ui/Card";
 import { Drawer } from "@/components/ui/Drawer";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { Select } from "@/components/ui/Select";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/States";
 import { toast } from "sonner";
@@ -32,7 +31,7 @@ type ScheduledRow = {
   locked_at: string | null;
   locked_by: string | null;
   account_did: string;
-  drafts?: { text: string | null } | null;
+  drafts?: { text: string | null }[] | { text: string | null } | null;
 };
 
 type EventRow = {
@@ -128,7 +127,7 @@ export default function ScheduledPage() {
     }
     if (term) {
       filtered = filtered.filter((row) => {
-        const text = row.drafts?.text ?? "";
+        const text = Array.isArray(row.drafts) ? row.drafts[0]?.text ?? "" : row.drafts?.text ?? "";
         return text.toLowerCase().includes(term) || row.id.includes(term);
       });
     }
@@ -196,17 +195,25 @@ export default function ScheduledPage() {
           onChange={(e) => setSearch(e.target.value)}
           className="max-w-xs"
         />
-        <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="max-w-[160px]">
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm max-w-[160px]"
+        >
           {statusOptions.map((status) => (
             <option key={status} value={status}>
               {status}
             </option>
           ))}
-        </Select>
-        <Select value={sortKey} onChange={(e) => setSortKey(e.target.value as "run_at" | "status")} className="max-w-[160px]">
+        </select>
+        <select
+          value={sortKey}
+          onChange={(e) => setSortKey(e.target.value as "run_at" | "status")}
+          className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm max-w-[160px]"
+        >
           <option value="run_at">Sort: Run time</option>
           <option value="status">Sort: Status</option>
-        </Select>
+        </select>
         <Button variant="ghost" size="sm" onClick={loadScheduled}>
           Refresh
         </Button>
@@ -236,7 +243,7 @@ export default function ScheduledPage() {
                   {format(new Date(row.run_at), "MMM d, yyyy HH:mm")}
                 </div>
                 <div className="col-span-5 text-sm text-black/80">
-                  {row.drafts?.text ?? "(missing draft)"}
+                  {Array.isArray(row.drafts) ? row.drafts[0]?.text ?? "(missing draft)" : row.drafts?.text ?? "(missing draft)"}
                 </div>
                 <div className="col-span-2 text-xs text-black/60">
                   {row.attempt_count}/{row.max_attempts}
@@ -257,7 +264,9 @@ export default function ScheduledPage() {
             <div>
               <div className="text-xs uppercase tracking-wide text-black/40">Draft</div>
               <div className="mt-2 whitespace-pre-line rounded-xl border border-black/10 bg-white/70 p-4">
-                {selected.drafts?.text ?? "No draft text"}
+                {Array.isArray(selected.drafts)
+                  ? selected.drafts[0]?.text ?? "No draft text"
+                  : selected.drafts?.text ?? "No draft text"}
               </div>
             </div>
 

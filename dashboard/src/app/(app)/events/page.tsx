@@ -5,7 +5,6 @@ import { format } from "date-fns";
 import { supabase } from "@/lib/supabaseClient";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
-import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/States";
 import { toast } from "sonner";
@@ -86,17 +85,25 @@ export default function EventsPage() {
   return (
     <div className="space-y-6">
       <Card className="flex flex-wrap items-center gap-3">
-        <Select value={eventType} onChange={(e) => setEventType(e.target.value)} className="max-w-[180px]">
+        <select
+          value={eventType}
+          onChange={(e) => setEventType(e.target.value)}
+          className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm max-w-[180px]"
+        >
           {eventTypes.map((type) => (
             <option key={type} value={type}>
               {type}
             </option>
           ))}
-        </Select>
-        <Select value={sortDir} onChange={(e) => setSortDir(e.target.value as "asc" | "desc")} className="max-w-[160px]">
+        </select>
+        <select
+          value={sortDir}
+          onChange={(e) => setSortDir(e.target.value as "asc" | "desc")}
+          className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm max-w-[160px]"
+        >
           <option value="desc">Sort: newest</option>
           <option value="asc">Sort: oldest</option>
-        </Select>
+        </select>
         <Input
           placeholder="Search by ID, type, or error"
           value={search}

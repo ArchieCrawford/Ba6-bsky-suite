@@ -7,7 +7,6 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
-import { Select } from "@/components/ui/Select";
 import { Modal } from "@/components/ui/Modal";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/States";
 import { toast } from "sonner";
@@ -182,10 +181,14 @@ export default function DraftsPage() {
             onChange={(e) => setSearch(e.target.value)}
             className="max-w-xs"
           />
-          <Select value={sortKey} onChange={(e) => setSortKey(e.target.value as "newest" | "title")} className="max-w-[160px]">
+          <select
+            value={sortKey}
+            onChange={(e) => setSortKey(e.target.value as "newest" | "title")}
+            className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm max-w-[160px]"
+          >
             <option value="newest">Sort: newest</option>
             <option value="title">Sort: title</option>
-          </Select>
+          </select>
           <Button variant="ghost" size="sm" onClick={loadData}>
             Refresh
           </Button>
@@ -217,13 +220,17 @@ export default function DraftsPage() {
         <div className="space-y-4 text-sm">
           <div>
             <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Account</label>
-            <Select value={selectedAccount} onChange={(e) => setSelectedAccount(e.target.value)}>
+            <select
+              value={selectedAccount}
+              onChange={(e) => setSelectedAccount(e.target.value)}
+              className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm"
+            >
               {accounts.map((account) => (
                 <option key={account.did} value={account.did}>
                   {account.handle}
                 </option>
               ))}
-            </Select>
+            </select>
           </div>
           <div>
             <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Run at</label>

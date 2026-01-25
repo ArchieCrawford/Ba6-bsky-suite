@@ -6,7 +6,8 @@
     "dev:feedgen": "npm --prefix feedgen run dev",
     "dev:dashboard": "npm --prefix dashboard run dev",
     "dev": "concurrently -n worker,feedgen -c blue,green \"npm run dev:worker\" \"npm run dev:feedgen\"",
-    "dev:all": "concurrently -n worker,feedgen,dashboard -c blue,green,magenta \"npm run dev:worker\" \"npm run dev:feedgen\" \"npm run dev:dashboard\""
+    "dev:all": "concurrently -n worker,feedgen,dashboard -c blue,green,magenta \"npm run dev:worker\" \"npm run dev:feedgen\" \"npm run dev:dashboard\"",
+    "audit": "node scripts/audit-repo.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

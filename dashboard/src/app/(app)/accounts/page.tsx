@@ -97,10 +97,14 @@ export default function AccountsPage() {
           onChange={(e) => setSearch(e.target.value)}
           className="max-w-xs"
         />
-        <Select value={sortKey} onChange={(e) => setSortKey(e.target.value as "handle" | "expiry")} className="max-w-[160px]">
+        <select
+          value={sortKey}
+          onChange={(e) => setSortKey(e.target.value as "handle" | "expiry")}
+          className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm max-w-[160px]"
+        >
           <option value="handle">Sort: handle</option>
           <option value="expiry">Sort: expiry</option>
-        </Select>
+        </select>
         <Button variant="ghost" size="sm" onClick={loadData}>
           Refresh
         </Button>

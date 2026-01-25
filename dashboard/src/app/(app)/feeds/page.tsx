@@ -5,7 +5,6 @@ import { supabase } from "@/lib/supabaseClient";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { Select } from "@/components/ui/Select";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/States";
 import { toast } from "sonner";
 
@@ -206,8 +205,8 @@ export default function FeedsPage() {
         .eq("feed_id", feedRow.id);
       if (sourceError) throw sourceError;
 
-      const includeKeywords = (ruleRow?.include_keywords ?? []).map((k: string) => k.trim()).filter(Boolean);
-      const excludeKeywords = (ruleRow?.exclude_keywords ?? []).map((k: string) => k.trim()).filter(Boolean);
+      const includeKeywords: string[] = (ruleRow?.include_keywords ?? []).map((k: string) => k.trim()).filter(Boolean);
+      const excludeKeywords: string[] = (ruleRow?.exclude_keywords ?? []).map((k: string) => k.trim()).filter(Boolean);
       const authorDids = (sourceRows ?? [])
         .filter((s: any) => s.source_type === "account_list" && s.account_did)
         .map((s: any) => s.account_did);
@@ -312,14 +311,14 @@ export default function FeedsPage() {
               onChange={(e) => setSearch(e.target.value)}
               className="max-w-xs"
             />
-            <Select
+            <select
               value={sortKey}
               onChange={(e) => setSortKey(e.target.value as "slug" | "status")}
-              className="max-w-[160px]"
+              className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm max-w-[160px]"
             >
               <option value="slug">Sort: slug</option>
               <option value="status">Sort: status</option>
-            </Select>
+            </select>
             <Button variant="ghost" size="sm" onClick={loadFeeds}>
               Refresh
             </Button>
@@ -393,13 +392,17 @@ export default function FeedsPage() {
         <Card>
           <div className="text-sm font-semibold uppercase tracking-wide text-black/50">Test feed</div>
           <div className="mt-4 space-y-3">
-            <Select value={testSlug} onChange={(e) => setTestSlug(e.target.value)}>
+            <select
+              value={testSlug}
+              onChange={(e) => setTestSlug(e.target.value)}
+              className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm"
+            >
               {feeds.map((feed) => (
                 <option key={feed.slug} value={feed.slug}>
                   {feed.slug}
                 </option>
               ))}
-            </Select>
+            </select>
             <Button size="sm" onClick={runTest} disabled={testing}>
               {testing ? "Running..." : "Run test"}
             </Button>
