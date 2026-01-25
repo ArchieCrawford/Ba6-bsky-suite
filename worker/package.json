@@ -6,7 +6,8 @@
     "dev": "tsx src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
-    "connect": "tsx src/connect.ts"
+    "connect": "tsx src/connect.ts",
+    "publish-feed": "tsx src/publishFeed.ts"
   },
   "dependencies": {
     "@atproto/api": "^0.13.25",
