@@ -34,6 +34,7 @@ type FeedRow = {
 };
 
 type SourceRow = { source_type: string; account_did: string | null };
+type AccountRow = { did: string; handle: string };
 
 type TestRow = {
   uri: string;
@@ -55,9 +56,12 @@ export default function FeedsPage() {
   const [exclude, setExclude] = useState("");
   const [lang, setLang] = useState("");
   const [sources, setSources] = useState<SourceRow[]>([]);
+  const [accounts, setAccounts] = useState<AccountRow[]>([]);
+  const [selectedAccountDid, setSelectedAccountDid] = useState("");
   const [testSlug, setTestSlug] = useState("");
   const [testResults, setTestResults] = useState<TestRow[]>([]);
   const [testing, setTesting] = useState(false);
+  const [publishing, setPublishing] = useState(false);
 
   const filteredFeeds = useMemo(() => {
     const term = search.toLowerCase();
@@ -100,6 +104,28 @@ export default function FeedsPage() {
       toast.error(message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadAccounts = async () => {
+    try {
+      const { data, error: accountError } = await supabase
+        .from("bsky_accounts")
+        .select("did,handle")
+        .order("created_at", { ascending: false });
+      if (accountError) throw accountError;
+      const rows = (data ?? []) as AccountRow[];
+      setAccounts(rows);
+      setSelectedAccountDid((current) => {
+        if (rows.some((account) => account.did === current)) {
+          return current;
+        }
+        return rows[0]?.did ?? "";
+      });
+    } catch (err: any) {
+      toast.error(err?.message ?? "Failed to load accounts");
+      setAccounts([]);
+      setSelectedAccountDid("");
     }
   };
 
@@ -173,6 +199,48 @@ export default function FeedsPage() {
       await loadFeeds();
     } catch (err: any) {
       toast.error(err?.message ?? "Failed to update feed");
+    }
+  };
+
+  const publishFeed = async () => {
+    if (!selectedFeedId) {
+      toast.error("Select a feed to publish");
+      return;
+    }
+    if (!selectedAccountDid) {
+      toast.error("Select a Bluesky account to publish");
+      return;
+    }
+    setPublishing(true);
+    try {
+      const { data, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !data.session?.access_token) {
+        throw new Error("Missing session");
+      }
+      const res = await fetch("/api/feeds/publish", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${data.session.access_token}`
+        },
+        body: JSON.stringify({
+          feedId: selectedFeedId,
+          accountDid: selectedAccountDid
+        })
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(payload?.error ?? "Failed to publish feed");
+      }
+      if (payload?.status === "unchanged") {
+        toast.success("Feed already published");
+      } else {
+        toast.success("Feed published");
+      }
+    } catch (err: any) {
+      toast.error(err?.message ?? "Failed to publish feed");
+    } finally {
+      setPublishing(false);
     }
   };
 
@@ -263,6 +331,7 @@ export default function FeedsPage() {
 
   useEffect(() => {
     loadFeeds();
+    loadAccounts();
   }, []);
 
   useEffect(() => {
@@ -386,6 +455,35 @@ export default function FeedsPage() {
                 ))}
               </ul>
             )}
+          </div>
+
+          <div className="mt-6">
+            <div className="text-xs font-semibold uppercase tracking-wide text-black/50">Publish feed</div>
+            {accounts.length === 0 ? (
+              <div className="mt-2 text-xs text-black/50">Connect a Bluesky account to publish this feed.</div>
+            ) : (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <select
+                  value={selectedAccountDid}
+                  onChange={(e) => setSelectedAccountDid(e.target.value)}
+                  className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm max-w-[220px]"
+                >
+                  {accounts.map((account) => (
+                    <option key={account.did} value={account.did}>
+                      {account.handle}
+                    </option>
+                  ))}
+                </select>
+                <Button
+                  size="sm"
+                  onClick={publishFeed}
+                  disabled={!selectedFeedId || !selectedAccountDid || publishing}
+                >
+                  {publishing ? "Publishing..." : "Publish feed"}
+                </Button>
+              </div>
+            )}
+            <div className="mt-2 text-xs text-black/50">Creates or updates the feed generator record for this feed.</div>
           </div>
         </Card>
 
