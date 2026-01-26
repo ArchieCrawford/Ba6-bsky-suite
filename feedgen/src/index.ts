@@ -175,7 +175,11 @@ app.get("/.well-known/did.json", (_req: Request, res: Response) => {
 app.get("/xrpc/app.bsky.feed.getFeedSkeleton", async (req: Request, res: Response) => {
   try {
     const parsed = qSchema.parse(req.query);
-    const slug = parsed.feed;
+    const feedParam = parsed.feed;
+    const slug = feedParam.startsWith("at://") ? feedParam.split("/").pop() : feedParam;
+    if (!slug || !/^[a-z0-9-]+$/i.test(slug)) {
+      return res.status(400).json({ error: "Invalid feed slug" });
+    }
     const limit = Math.min(Number(parsed.limit ?? "50"), 100);
     const cursor = parsed.cursor ? parseCursor(parsed.cursor) : null;
 
