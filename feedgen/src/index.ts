@@ -4,7 +4,7 @@ import type { Request, Response } from "express";
 import { z } from "zod";
 import { supa } from "./supa.js";
 
-const PORT = Number(process.env.FEEDGEN_PORT ?? "8080");
+const PORT = Number(process.env.PORT ?? process.env.FEEDGEN_PORT ?? "8080");
 
 const qSchema = z.object({
   feed: z.string().min(1),
@@ -121,6 +121,24 @@ async function queryPosts(params: {
 }
 
 const app = express();
+
+app.get("/healthz", (_req: Request, res: Response) => {
+  res.status(200).type("text/plain").send("ok");
+});
+
+app.get("/.well-known/did.json", (_req: Request, res: Response) => {
+  res.status(200).json({
+    "@context": ["https://www.w3.org/ns/did/v1"],
+    id: "did:web:feeds.ba6-bsky-suite.com",
+    service: [
+      {
+        id: "#bsky_fg",
+        type: "BskyFeedGenerator",
+        serviceEndpoint: "https://feeds.ba6-bsky-suite.com"
+      }
+    ]
+  });
+});
 
 app.get("/xrpc/app.bsky.feed.getFeedSkeleton", async (req: Request, res: Response) => {
   try {
