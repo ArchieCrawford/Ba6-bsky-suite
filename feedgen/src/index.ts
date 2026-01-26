@@ -126,6 +126,14 @@ app.get("/healthz", (_req: Request, res: Response) => {
   res.status(200).type("text/plain").send("ok");
 });
 
+app.get("/__version", (_req: Request, res: Response) => {
+  res.status(200).json({
+    ok: true,
+    commit: process.env.RENDER_GIT_COMMIT ?? null,
+    ts: new Date().toISOString()
+  });
+});
+
 app.get("/.well-known/did.json", (_req: Request, res: Response) => {
   res.status(200).json({
     "@context": ["https://www.w3.org/ns/did/v1"],
