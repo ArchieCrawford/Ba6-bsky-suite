@@ -121,6 +121,30 @@ async function queryPosts(params: {
 }
 
 const app = express();
+const PUBLIC_PATHS = new Set(["/healthz", "/__version", "/.well-known/did.json"]);
+
+app.use((req: Request, res: Response, next) => {
+  if (PUBLIC_PATHS.has(req.path)) {
+    res.on("finish", () => {
+      const host = req.headers["host"] ?? "";
+      const forwardedProto = req.headers["x-forwarded-proto"] ?? "";
+      const forwardedFor = req.headers["x-forwarded-for"] ?? "";
+      process.stdout.write(
+        JSON.stringify({
+          level: "info",
+          event: "public_route",
+          method: req.method,
+          path: req.path,
+          status: res.statusCode,
+          host,
+          forwarded_proto: forwardedProto,
+          forwarded_for: forwardedFor
+        }) + "\n"
+      );
+    });
+  }
+  next();
+});
 
 app.get("/healthz", (_req: Request, res: Response) => {
   res.status(200).type("text/plain").send("ok");
