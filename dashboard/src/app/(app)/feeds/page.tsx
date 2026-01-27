@@ -28,13 +28,13 @@ const matchesKeyword = (text: string, keyword: string) => {
 type FeedRow = {
   id: string;
   slug: string;
-  display_name: string;
+  title: string | null;
   description: string | null;
   is_enabled: boolean;
 };
 
 type SourceRow = { source_type: string; account_did: string | null };
-type AccountRow = { did: string; handle: string };
+type AccountRow = { account_did: string; handle: string | null };
 
 type TestRow = {
   uri: string;
@@ -70,7 +70,7 @@ export default function FeedsPage() {
       filtered = feeds.filter((feed) => {
         return (
           feed.slug.toLowerCase().includes(term) ||
-          feed.display_name.toLowerCase().includes(term) ||
+          (feed.title ?? "").toLowerCase().includes(term) ||
           feed.description?.toLowerCase().includes(term)
         );
       });
@@ -89,7 +89,7 @@ export default function FeedsPage() {
     try {
       const { data, error: feedError } = await supabase
         .from("feeds")
-        .select("id,slug,display_name,description,is_enabled")
+        .select("id,slug,title,description,is_enabled")
         .order("created_at", { ascending: false });
       if (feedError) throw feedError;
       const feedRows = (data ?? []) as FeedRow[];
@@ -110,17 +110,17 @@ export default function FeedsPage() {
   const loadAccounts = async () => {
     try {
       const { data, error: accountError } = await supabase
-        .from("bsky_accounts")
-        .select("did,handle")
+        .from("accounts")
+        .select("account_did,handle")
         .order("created_at", { ascending: false });
       if (accountError) throw accountError;
       const rows = (data ?? []) as AccountRow[];
       setAccounts(rows);
       setSelectedAccountDid((current) => {
-        if (rows.some((account) => account.did === current)) {
+        if (rows.some((account) => account.account_did === current)) {
           return current;
         }
-        return rows[0]?.did ?? "";
+        return rows[0]?.account_did ?? "";
       });
     } catch (err: any) {
       toast.error(err?.message ?? "Failed to load accounts");
@@ -401,7 +401,7 @@ export default function FeedsPage() {
             {filteredFeeds.map((feed) => (
               <div key={feed.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
                 <div>
-                  <div className="text-sm font-semibold text-ink">{feed.display_name}</div>
+                  <div className="text-sm font-semibold text-ink">{feed.title ?? "Untitled feed"}</div>
                   <div className="text-xs text-black/50">/{feed.slug}</div>
                 </div>
                 <div className="flex gap-2">
@@ -469,8 +469,8 @@ export default function FeedsPage() {
                   className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm max-w-[220px]"
                 >
                   {accounts.map((account) => (
-                    <option key={account.did} value={account.did}>
-                      {account.handle}
+                    <option key={account.account_did} value={account.account_did}>
+                      {account.handle ?? account.account_did}
                     </option>
                   ))}
                 </select>

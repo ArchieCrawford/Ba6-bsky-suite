@@ -13,12 +13,11 @@ import { toast } from "sonner";
 
 type DraftRow = {
   id: string;
-  title: string | null;
   text: string;
   created_at: string;
 };
 
-type AccountRow = { did: string; handle: string };
+type AccountRow = { id: string; account_did: string; handle: string | null };
 
 export default function DraftsPage() {
   const [drafts, setDrafts] = useState<DraftRow[]>([]);
@@ -27,12 +26,10 @@ export default function DraftsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [sortKey, setSortKey] = useState<"newest" | "title">("newest");
-  const [title, setTitle] = useState("");
   const [text, setText] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedDraft, setSelectedDraft] = useState<DraftRow | null>(null);
-  const [selectedAccount, setSelectedAccount] = useState("");
+  const [selectedAccountId, setSelectedAccountId] = useState("");
   const [runAt, setRunAt] = useState("");
 
   const loadData = async () => {
@@ -47,19 +44,19 @@ export default function DraftsPage() {
 
       const { data: draftRows, error: draftError } = await supabase
         .from("drafts")
-        .select("id,title,text,created_at")
+        .select("id,text,created_at")
         .order("created_at", { ascending: false });
       if (draftError) throw draftError;
       setDrafts((draftRows ?? []) as DraftRow[]);
 
       const { data: accountRows, error: accountError } = await supabase
-        .from("bsky_accounts")
-        .select("did,handle")
+        .from("accounts")
+        .select("id,account_did,handle")
         .order("created_at", { ascending: false });
       if (accountError) throw accountError;
       setAccounts((accountRows ?? []) as AccountRow[]);
       if (accountRows?.length) {
-        setSelectedAccount(accountRows[0].did);
+        setSelectedAccountId(accountRows[0].id);
       }
     } catch (err: any) {
       const message = err?.message ?? "Failed to load drafts";
@@ -79,12 +76,10 @@ export default function DraftsPage() {
     try {
       const { error: insertError } = await supabase.from("drafts").insert({
         user_id: userId,
-        title: title.trim() || null,
         text: text.trim()
       });
       if (insertError) throw insertError;
       toast.success("Draft saved");
-      setTitle("");
       setText("");
       await loadData();
     } catch (err: any) {
@@ -100,6 +95,7 @@ export default function DraftsPage() {
 
   const scheduleDraft = async () => {
     if (!userId || !selectedDraft) return;
+    const selectedAccount = accounts.find((account) => account.id === selectedAccountId);
     if (!selectedAccount) {
       toast.error("Choose a Bluesky account");
       return;
@@ -112,9 +108,11 @@ export default function DraftsPage() {
     try {
       const { error: scheduleError } = await supabase.from("scheduled_posts").insert({
         user_id: userId,
-        account_did: selectedAccount,
+        account_id: selectedAccount.id,
+        account_did: selectedAccount.account_did,
         draft_id: selectedDraft.id,
         run_at: new Date(runAt).toISOString(),
+        max_attempts: 5,
         status: "queued"
       });
       if (scheduleError) throw scheduleError;
@@ -130,20 +128,13 @@ export default function DraftsPage() {
     let filtered = drafts;
     if (term) {
       filtered = drafts.filter((draft) => {
-        return (
-          draft.title?.toLowerCase().includes(term) ||
-          draft.text.toLowerCase().includes(term) ||
-          draft.id.includes(term)
-        );
+        return draft.text.toLowerCase().includes(term) || draft.id.includes(term);
       });
     }
     return [...filtered].sort((a, b) => {
-      if (sortKey === "title") {
-        return (a.title ?? "").localeCompare(b.title ?? "");
-      }
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
-  }, [drafts, search, sortKey]);
+  }, [drafts, search]);
 
   useEffect(() => {
     loadData();
@@ -157,11 +148,6 @@ export default function DraftsPage() {
       <Card>
         <div className="text-sm font-semibold uppercase tracking-wide text-black/50">New draft</div>
         <div className="mt-4 grid gap-4">
-          <Input
-            placeholder="Optional title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-          />
           <Textarea
             rows={6}
             placeholder="Write the post copy..."
@@ -181,14 +167,6 @@ export default function DraftsPage() {
             onChange={(e) => setSearch(e.target.value)}
             className="max-w-xs"
           />
-          <select
-            value={sortKey}
-            onChange={(e) => setSortKey(e.target.value as "newest" | "title")}
-            className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm max-w-[160px]"
-          >
-            <option value="newest">Sort: newest</option>
-            <option value="title">Sort: title</option>
-          </select>
           <Button variant="ghost" size="sm" onClick={loadData}>
             Refresh
           </Button>
@@ -201,7 +179,9 @@ export default function DraftsPage() {
             {filteredDrafts.map((draft) => (
               <div key={draft.id} className="flex flex-wrap items-start justify-between gap-3 py-3">
                 <div>
-                  <div className="text-sm font-semibold text-ink">{draft.title ?? "Untitled"}</div>
+                  <div className="text-sm font-semibold text-ink">
+                    {draft.text.split("\n")[0]?.slice(0, 80) || "Untitled"}
+                  </div>
                   <div className="mt-1 text-sm text-black/60">{draft.text}</div>
                   <div className="mt-2 text-xs text-black/40">
                     {format(new Date(draft.created_at), "MMM d, yyyy HH:mm")}
@@ -221,13 +201,13 @@ export default function DraftsPage() {
           <div>
             <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Account</label>
             <select
-              value={selectedAccount}
-              onChange={(e) => setSelectedAccount(e.target.value)}
+              value={selectedAccountId}
+              onChange={(e) => setSelectedAccountId(e.target.value)}
               className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm"
             >
               {accounts.map((account) => (
-                <option key={account.did} value={account.did}>
-                  {account.handle}
+                <option key={account.id} value={account.id}>
+                  {account.handle ?? account.account_did}
                 </option>
               ))}
             </select>

@@ -26,6 +26,15 @@ For the dashboard, copy the dashboard env example:
 cp dashboard/.env.example dashboard/.env.local
 ```
 
+## Multi-user + RLS
+
+- `dashboard/` uses the anon key + user session. All reads are scoped by RLS policies; inserts include `user_id = auth.uid()`.
+- The dashboard publish API route uses `SUPABASE_SERVICE_ROLE_KEY` + `FEEDGEN_SERVICE_DID` (server-side only).
+- `public.users` is the profile table keyed by `auth.uid()`. The dashboard bootstraps a profile row on first authenticated load.
+- `worker/` and `feedgen/` use `SUPABASE_SERVICE_ROLE_KEY` and bypass RLS for background tasks.
+- Ownership is enforced through `user_id` foreign keys on `accounts`, `drafts`, `scheduled_posts`, and `feeds`.
+- `accounts` stores Bluesky app passwords (server-side only). Never expose the service role key or app passwords to clients.
+
 ## Supabase migration
 
 Run the migration in the Supabase dashboard SQL editor, or with the Supabase CLI:
@@ -86,7 +95,7 @@ npm run dev:all
 
 ## Connect Bluesky (app password)
 
-This is a simple CLI flow that stores `bsky_accounts` and `bsky_sessions` using the Supabase service key.
+This is a simple CLI flow that stores `accounts` using the Supabase service key.
 
 ```bash
 cd worker
@@ -102,7 +111,7 @@ The worker inserts successful posts into `indexed_posts` so feeds work immediate
 ## Seed example (run once)
 
 ```sql
-insert into public.feeds (user_id, slug, display_name, description)
+insert into public.feeds (user_id, slug, title, description)
 values ('YOUR_AUTH_USER_UUID', 'ba6-systems-notes', 'BA6 - Systems Notes', 'Power, order, institutions');
 
 insert into public.feed_sources (feed_id, source_type, account_did)

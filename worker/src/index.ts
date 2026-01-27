@@ -11,6 +11,7 @@ const WORKER_ID = process.env.WORKER_ID ?? `worker-${randomUUID()}`;
 type ScheduledRow = {
   id: string;
   user_id: string;
+  account_id: string;
   account_did: string;
   draft_id: string;
   run_at: string;
@@ -21,15 +22,14 @@ type ScheduledRow = {
 
 type DraftRow = { id: string; text: string };
 
-type SessionRow = {
+type AccountRow = {
+  id: string;
   user_id: string;
   account_did: string;
-  access_jwt: string;
-  refresh_jwt: string;
-  expires_at: string;
+  handle: string | null;
+  app_password: string | null;
+  is_active: boolean | null;
 };
-
-type AccountRow = { user_id: string; did: string; handle: string; service: string };
 
 type NormalizedError = {
   error_message: string;
@@ -76,44 +76,18 @@ async function fetchDraft(userId: string, draftId: string): Promise<DraftRow> {
   return data as DraftRow;
 }
 
-async function fetchAccount(userId: string, did: string): Promise<AccountRow> {
+async function fetchAccount(accountId: string, expectedDid: string): Promise<AccountRow> {
   const { data, error } = await supa
-    .from("bsky_accounts")
-    .select("user_id,did,handle,service")
-    .eq("user_id", userId)
-    .eq("did", did)
+    .from("accounts")
+    .select("id,user_id,account_did,handle,app_password,is_active")
+    .eq("id", accountId)
     .single();
   if (error) throw error;
-  return data as AccountRow;
-}
-
-async function fetchSession(userId: string, did: string): Promise<SessionRow> {
-  const { data, error } = await supa
-    .from("bsky_sessions")
-    .select("user_id,account_did,access_jwt,refresh_jwt,expires_at")
-    .eq("user_id", userId)
-    .eq("account_did", did)
-    .single();
-  if (error) throw error;
-  return data as SessionRow;
-}
-
-async function saveSession(userId: string, did: string, accessJwt: string, refreshJwt: string, expiresAt: Date) {
-  const now = new Date().toISOString();
-  const { error } = await supa
-    .from("bsky_sessions")
-    .upsert(
-      {
-        user_id: userId,
-        account_did: did,
-        access_jwt: accessJwt,
-        refresh_jwt: refreshJwt,
-        expires_at: expiresAt.toISOString(),
-        updated_at: now
-      },
-      { onConflict: "user_id,account_did" }
-    );
-  if (error) throw error;
+  const account = data as AccountRow;
+  if (account.account_did !== expectedDid) {
+    throw new Error("Account DID mismatch");
+  }
+  return account;
 }
 
 async function logEvent(
@@ -137,7 +111,7 @@ async function logEvent(
   }
 }
 
-async function markPosted(userId: string, scheduledPostId: string, uri: string, cid: string) {
+async function markPosted(scheduledPostId: string, uri: string, cid: string) {
   const now = new Date().toISOString();
   await supa
     .from("scheduled_posts")
@@ -150,68 +124,57 @@ async function markPosted(userId: string, scheduledPostId: string, uri: string, 
       locked_by: null,
       updated_at: now
     })
-    .eq("id", scheduledPostId)
-    .eq("user_id", userId);
+    .eq("id", scheduledPostId);
 }
 
 async function markFailed(
-  userId: string,
   scheduledPostId: string,
   attemptCount: number,
   maxAttempts: number,
   err: string
 ) {
   const now = new Date().toISOString();
-  const status = attemptCount + 1 >= maxAttempts ? "failed" : "queued";
+  const status = attemptCount >= maxAttempts ? "failed" : "queued";
   await supa
     .from("scheduled_posts")
     .update({
       status,
-      attempt_count: attemptCount + 1,
+      attempt_count: attemptCount,
       last_error: err,
       locked_at: null,
       locked_by: null,
       updated_at: now
     })
-    .eq("id", scheduledPostId)
-    .eq("user_id", userId);
+    .eq("id", scheduledPostId);
 }
 
-async function postToBluesky(userId: string, did: string, text: string) {
-  const account = await fetchAccount(userId, did);
-  const session = await fetchSession(userId, did);
+async function loginAgent(account: AccountRow) {
+  if (account.is_active === false) {
+    throw new Error("Account is disabled");
+  }
+  if (!account.app_password) {
+    throw new Error("Missing app password for account");
+  }
+  const service = process.env.BLUESKY_SERVICE ?? "https://bsky.social";
+  const agent = agentFor(service);
+  const identifier = account.handle ?? account.account_did;
+  const loginRes = await agent.login({ identifier, password: account.app_password });
 
-  const agent = agentFor(account.service);
-
-  await agent.resumeSession({
-    did,
-    handle: account.handle,
-    email: undefined,
-    accessJwt: session.access_jwt,
-    refreshJwt: session.refresh_jwt,
-    active: true
-  });
-
-  const now = Date.now();
-  const exp = new Date(session.expires_at).getTime();
-  if (exp - now < 30_000) {
-    const refreshed = await agent.api.com.atproto.server.refreshSession(undefined, {
-      headers: { authorization: `Bearer ${session.refresh_jwt}` }
-    });
-    const newAccess = refreshed.data.accessJwt;
-    const newRefresh = refreshed.data.refreshJwt;
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
-    await saveSession(userId, did, newAccess, newRefresh, expiresAt);
-    await agent.resumeSession({
-      did,
-      handle: refreshed.data.handle ?? account.handle,
-      email: undefined,
-      accessJwt: newAccess,
-      refreshJwt: newRefresh,
-      active: true
-    });
+  if (loginRes.data.did && loginRes.data.did !== account.account_did) {
+    throw new Error("Account DID mismatch");
   }
 
+  const now = new Date().toISOString();
+  await supa
+    .from("accounts")
+    .update({ last_auth_at: now, handle: loginRes.data.handle ?? account.handle })
+    .eq("id", account.id);
+
+  return agent;
+}
+
+async function postToBluesky(account: AccountRow, text: string) {
+  const agent = await loginAgent(account);
   const res = await agent.post({ text });
   return { uri: res.uri, cid: res.cid };
 }
@@ -232,7 +195,7 @@ async function heartbeat(detail: Record<string, unknown> = {}) {
 async function loopOnce(): Promise<number> {
   const due = await claimDuePosts(10);
   for (const job of due) {
-    const attempt = job.attempt_count + 1;
+    const attempt = job.attempt_count;
     const start = Date.now();
     let phase: "pre_post" | "posting" | "post_done" = "pre_post";
     try {
@@ -242,23 +205,24 @@ async function loopOnce(): Promise<number> {
         lock_seconds: LOCK_SECONDS
       });
       const draft = await fetchDraft(job.user_id, job.draft_id);
+      const account = await fetchAccount(job.account_id, job.account_did);
       await logEvent(job.user_id, job.id, "post_attempt", { run_at: job.run_at, attempt });
 
       phase = "posting";
-      const posted = await postToBluesky(job.user_id, job.account_did, draft.text);
+      const posted = await postToBluesky(account, draft.text);
       phase = "post_done";
       const durationMs = Date.now() - start;
 
       await supa.from("indexed_posts").upsert({
         uri: posted.uri,
-        cid: posted.cid,
         author_did: job.account_did,
         text: draft.text,
         created_at: new Date().toISOString(),
-        lang: null
+        lang: null,
+        raw: { cid: posted.cid, scheduled_post_id: job.id }
       });
 
-      await markPosted(job.user_id, job.id, posted.uri, posted.cid);
+      await markPosted(job.id, posted.uri, posted.cid);
       await logEvent(job.user_id, job.id, "post_success", {
         uri: posted.uri,
         cid: posted.cid,
@@ -275,7 +239,7 @@ async function loopOnce(): Promise<number> {
       const durationMs = Date.now() - start;
       const norm = normalizeError(e);
       const msg = norm.error_message.slice(0, 1000);
-      await markFailed(job.user_id, job.id, job.attempt_count, job.max_attempts, msg);
+      await markFailed(job.id, job.attempt_count, job.max_attempts, msg);
       const eventType = phase === "posting" ? "post_failed" : "worker_error";
       await logEvent(job.user_id, job.id, eventType, {
         duration_ms: durationMs,

@@ -32,6 +32,19 @@ function escapeFilterValue(value: string) {
   return value.replace(/[,()]/g, "\\$&");
 }
 
+function normalizeFeedSlug(feed: string) {
+  if (!feed) return null;
+  if (feed.startsWith("at://")) {
+    const match = feed.match(/^at:\/\/[^/]+\/app\\.bsky\\.feed\\.generator\\/([^/?#]+)/i);
+    if (match?.[1]) {
+      return decodeURIComponent(match[1]);
+    }
+    const parts = feed.split("/");
+    return parts[parts.length - 1] ? decodeURIComponent(parts[parts.length - 1]) : null;
+  }
+  return feed;
+}
+
 function parseCursor(cursor?: string) {
   if (!cursor) return null;
   try {
@@ -53,7 +66,8 @@ async function getFeedConfig(slug: string) {
     .from("feeds")
     .select("id,is_enabled")
     .eq("slug", slug)
-    .single();
+    .eq("is_enabled", true)
+    .maybeSingle();
   if (error) throw error;
   if (!data?.is_enabled) return null;
   return data as { id: string; is_enabled: boolean };
@@ -176,7 +190,7 @@ app.get("/xrpc/app.bsky.feed.getFeedSkeleton", async (req: Request, res: Respons
   try {
     const parsed = qSchema.parse(req.query);
     const feedParam = parsed.feed;
-    const slug = feedParam.startsWith("at://") ? feedParam.split("/").pop() : feedParam;
+    const slug = normalizeFeedSlug(feedParam);
     if (!slug || !/^[a-z0-9-]+$/i.test(slug)) {
       return res.status(400).json({ error: "Invalid feed slug" });
     }

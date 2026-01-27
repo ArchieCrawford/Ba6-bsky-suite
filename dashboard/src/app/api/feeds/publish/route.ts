@@ -1,6 +1,7 @@
 import { BskyAgent } from "@atproto/api";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { createSupabaseServerClient } from "@/lib/supabaseServer";
 
 export const runtime = "nodejs";
 
@@ -25,18 +26,17 @@ type FeedRow = {
   id: string;
   user_id: string;
   slug: string;
-  display_name: string;
+  title: string | null;
   description: string | null;
 };
 
-type AccountRow = { user_id: string; did: string; handle: string; service: string };
-
-type SessionRow = {
+type AccountRow = {
+  id: string;
   user_id: string;
   account_did: string;
-  access_jwt: string;
-  refresh_jwt: string;
-  expires_at: string;
+  handle: string | null;
+  app_password: string | null;
+  is_active: boolean | null;
 };
 
 function getBearerToken(request: Request) {
@@ -68,7 +68,7 @@ async function fetchFeed(supa: SupabaseClientAny, input: PublishRequest, userId:
   if (!input.feedId && !input.slug) {
     throw new Error("Missing feed id or slug");
   }
-  let query = supa.from("feeds").select("id,user_id,slug,display_name,description").eq("user_id", userId);
+  let query = supa.from("feeds").select("id,user_id,slug,title,description").eq("user_id", userId);
   if (input.feedId) {
     query = query.eq("id", input.feedId);
   } else if (input.slug) {
@@ -88,8 +88,11 @@ async function fetchAccount(
   accountDid?: string,
   handle?: string
 ): Promise<AccountRow> {
-  let query = supa.from("bsky_accounts").select("user_id,did,handle,service").eq("user_id", userId);
-  if (accountDid) query = query.eq("did", accountDid);
+  let query = supa
+    .from("accounts")
+    .select("id,user_id,account_did,handle,app_password,is_active")
+    .eq("user_id", userId);
+  if (accountDid) query = query.eq("account_did", accountDid);
   if (handle) query = query.eq("handle", handle);
   const { data, error } = await query;
   if (error) throw error;
@@ -102,81 +105,34 @@ async function fetchAccount(
   return data[0] as AccountRow;
 }
 
-async function fetchSession(supa: SupabaseClientAny, userId: string, did: string): Promise<SessionRow> {
-  const { data, error } = await supa
-    .from("bsky_sessions")
-    .select("user_id,account_did,access_jwt,refresh_jwt,expires_at")
-    .eq("user_id", userId)
-    .eq("account_did", did)
-    .single();
-  if (error) throw error;
-  return data as SessionRow;
-}
-
-async function saveSession(
-  supa: SupabaseClientAny,
-  userId: string,
-  did: string,
-  accessJwt: string,
-  refreshJwt: string,
-  expiresAt: Date
-) {
-  const now = new Date().toISOString();
-  const { error } = await supa
-    .from("bsky_sessions")
-    .upsert(
-      {
-        user_id: userId,
-        account_did: did,
-        access_jwt: accessJwt,
-        refresh_jwt: refreshJwt,
-        expires_at: expiresAt.toISOString(),
-        updated_at: now
-      },
-      { onConflict: "user_id,account_did" }
-    );
-  if (error) throw error;
-}
-
-async function resumeAgentSession(supa: SupabaseClientAny, account: AccountRow, session: SessionRow) {
-  const agent = new BskyAgent({ service: account.service });
-  await agent.resumeSession({
-    did: account.did,
-    handle: account.handle,
-    email: undefined,
-    accessJwt: session.access_jwt,
-    refreshJwt: session.refresh_jwt,
-    active: true
-  });
-
-  const now = Date.now();
-  const exp = new Date(session.expires_at).getTime();
-  if (exp - now < 30_000) {
-    const refreshed = await agent.api.com.atproto.server.refreshSession(undefined, {
-      headers: { authorization: `Bearer ${session.refresh_jwt}` }
-    });
-    const newAccess = refreshed.data.accessJwt;
-    const newRefresh = refreshed.data.refreshJwt;
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
-    await saveSession(supa, account.user_id, account.did, newAccess, newRefresh, expiresAt);
-    await agent.resumeSession({
-      did: account.did,
-      handle: refreshed.data.handle ?? account.handle,
-      email: undefined,
-      accessJwt: newAccess,
-      refreshJwt: newRefresh,
-      active: true
-    });
+async function loginAgent(supa: SupabaseClientAny, account: AccountRow) {
+  if (account.is_active === false) {
+    throw new Error("Account is disabled");
   }
+  if (!account.app_password) {
+    throw new Error("Missing app password for Bluesky account");
+  }
+  const service = process.env.BLUESKY_SERVICE ?? "https://bsky.social";
+  const agent = new BskyAgent({ service });
+  const identifier = account.handle ?? account.account_did;
+  const loginRes = await agent.login({ identifier, password: account.app_password });
+
+  if (loginRes.data.did && loginRes.data.did !== account.account_did) {
+    throw new Error("Account DID mismatch");
+  }
+
+  const now = new Date().toISOString();
+  await supa
+    .from("accounts")
+    .update({ last_auth_at: now, handle: loginRes.data.handle ?? account.handle })
+    .eq("id", account.id);
 
   return agent;
 }
 
 export async function POST(request: Request) {
   try {
-    const supa: SupabaseClientAny = createClient(requireEnv("SUPABASE_URL"), requireEnv("SUPABASE_SERVICE_ROLE_KEY"), {
-      auth: { persistSession: false }
-    });
+    const supa = createSupabaseServerClient();
     const feedgenDid = requireEnv("FEEDGEN_SERVICE_DID");
     const token = getBearerToken(request);
     if (!token) {
@@ -191,13 +147,12 @@ export async function POST(request: Request) {
     const input = (await request.json().catch(() => ({}))) as PublishRequest;
     const feed = await fetchFeed(supa, input, data.user.id);
     const account = await fetchAccount(supa, data.user.id, input.accountDid, input.handle);
-    const session = await fetchSession(supa, data.user.id, account.did);
-    const agent = await resumeAgentSession(supa, account, session);
+    const agent = await loginAgent(supa, account);
 
     let existingRecord: any = null;
     try {
       const res = await agent.api.com.atproto.repo.getRecord({
-        repo: account.did,
+        repo: account.account_did,
         collection: "app.bsky.feed.generator",
         rkey: feed.slug
       });
@@ -212,18 +167,18 @@ export async function POST(request: Request) {
       typeof existingRecord?.createdAt === "string" ? existingRecord.createdAt : new Date().toISOString();
     const record = {
       did: feedgenDid,
-      displayName: feed.display_name,
+      displayName: feed.title ?? feed.slug,
       ...(feed.description ? { description: feed.description } : {}),
       createdAt
     };
 
-    const uri = `at://${account.did}/app.bsky.feed.generator/${feed.slug}`;
+    const uri = `at://${account.account_did}/app.bsky.feed.generator/${feed.slug}`;
     if (recordsMatch(existingRecord, record)) {
       return NextResponse.json({ status: "unchanged", uri });
     }
 
     await agent.api.com.atproto.repo.putRecord({
-      repo: account.did,
+      repo: account.account_did,
       collection: "app.bsky.feed.generator",
       rkey: feed.slug,
       record

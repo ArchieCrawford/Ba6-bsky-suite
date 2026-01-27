@@ -73,40 +73,26 @@ async function main() {
   const loginRes = await agent.login({ identifier: handle, password: appPassword });
 
   const did = loginRes.data.did;
-  const accessJwt = loginRes.data.accessJwt;
-  const refreshJwt = loginRes.data.refreshJwt;
-  const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
   const now = new Date().toISOString();
 
+  const { error: userError } = await supa.from("users").upsert({ id: userId }, { onConflict: "id" });
+  if (userError) throw userError;
+
   const { error: accountError } = await supa
-    .from("bsky_accounts")
-    .upsert(
-      {
-        user_id: userId,
-        did,
-        handle: loginRes.data.handle,
-        service
-      },
-      { onConflict: "user_id,did" }
-    );
-
-  if (accountError) throw accountError;
-
-  const { error: sessionError } = await supa
-    .from("bsky_sessions")
+    .from("accounts")
     .upsert(
       {
         user_id: userId,
         account_did: did,
-        access_jwt: accessJwt,
-        refresh_jwt: refreshJwt,
-        expires_at: expiresAt.toISOString(),
-        updated_at: now
+        handle: loginRes.data.handle ?? handle,
+        app_password: appPassword,
+        last_auth_at: now,
+        is_active: true
       },
-      { onConflict: "user_id,account_did" }
+      { onConflict: "account_did" }
     );
 
-  if (sessionError) throw sessionError;
+  if (accountError) throw accountError;
 
   process.stdout.write(`Connected ${handle} (${did}) for user ${userId}\n`);
 }
