@@ -7,45 +7,86 @@ export type VeniceModel = {
   [key: string]: unknown;
 };
 
+type VeniceModelType = "image" | "text";
+
 const CACHE_TTL_MS = 10 * 60 * 1000;
 let cachedModels: VeniceModel[] | null = null;
 let cachedAt = 0;
 
-function normalizeType(value?: unknown) {
-  if (!value) return null;
-  const type = String(value).toLowerCase();
-  return type;
+function normalizeTokens(value: unknown): string[] {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => normalizeTokens(item));
+  }
+  if (typeof value === "string") {
+    return value
+      .split(/[^a-z0-9]+/i)
+      .map((token) => token.toLowerCase())
+      .filter(Boolean);
+  }
+  if (typeof value === "object") {
+    const tokens: string[] = [];
+    Object.entries(value as Record<string, unknown>).forEach(([key, entry]) => {
+      if (typeof entry === "boolean") {
+        if (entry) tokens.push(...normalizeTokens(key));
+        return;
+      }
+      tokens.push(...normalizeTokens(key));
+      tokens.push(...normalizeTokens(entry));
+    });
+    return tokens;
+  }
+  return [];
 }
 
-function inferModelType(model: VeniceModel): string | null {
-  const direct =
-    normalizeType(model.type) ||
-    normalizeType((model as any).model_type) ||
-    normalizeType((model as any).modality) ||
-    normalizeType((model as any).model_spec?.type) ||
-    normalizeType((model as any).model_spec?.modality);
+function collectTypeHints(model: VeniceModel): string[] {
+  const hints = [
+    model.type,
+    (model as any).model_type,
+    (model as any).modality,
+    (model as any).model_spec?.type,
+    (model as any).model_spec?.modality,
+    (model as any).model_spec?.modalities,
+    (model as any).modalities,
+    (model as any).capabilities,
+    (model as any).model_spec?.capabilities
+  ].flatMap((value) => normalizeTokens(value));
 
-  if (direct) return direct;
-
-  const capabilities = (model as any).capabilities;
-  if (Array.isArray(capabilities)) {
-    const imageCap = capabilities.find((cap) => normalizeType(cap)?.includes("image"));
-    if (imageCap) return "image";
+  if ((model as any).supportsVision || (model as any).model_spec?.supportsVision) {
+    hints.push("vision", "image");
+  }
+  if ((model as any).supportsText || (model as any).model_spec?.supportsText) {
+    hints.push("text");
   }
 
-  const modalities = (model as any).modalities;
-  if (Array.isArray(modalities)) {
-    const imageModality = modalities.find((cap) => normalizeType(cap)?.includes("image"));
-    if (imageModality) return "image";
-  }
+  return Array.from(new Set(hints));
+}
 
-  return null;
+function matchesType(model: VeniceModel, type: VeniceModelType): boolean {
+  const hints = collectTypeHints(model);
+  if (hints.length === 0) return false;
+  const hasImage = hints.some(
+    (hint) => hint.includes("image") || hint.includes("vision") || hint.includes("diffusion")
+  );
+  const hasText = hints.some(
+    (hint) =>
+      hint.includes("text") ||
+      hint.includes("chat") ||
+      hint.includes("llm") ||
+      hint.includes("language") ||
+      hint.includes("completion")
+  );
+  const isMultimodal = hints.some((hint) => hint.includes("multimodal"));
+
+  if (type === "image") return hasImage || isMultimodal;
+  return hasText || isMultimodal;
 }
 
 function toModel(value: any): VeniceModel | null {
   const id = value?.id ?? value?.model_id ?? value?.slug;
   if (!id) return null;
   return {
+    ...(typeof value === "object" && value ? value : {}),
     id: String(id),
     name:
       typeof value?.name === "string"
@@ -57,16 +98,21 @@ function toModel(value: any): VeniceModel | null {
       typeof value?.description === "string"
         ? value.description
         : typeof value?.model_spec?.description === "string"
-          ? value.model_spec.description
+        ? value.model_spec.description
+        : undefined,
+    type:
+      typeof value?.type === "string"
+        ? value.type
+        : typeof value?.model_type === "string"
+          ? value.model_type
           : undefined,
-    type: typeof value?.type === "string" ? value.type : undefined,
     model_spec: value?.model_spec ?? value?.spec ?? undefined
   };
 }
 
-export async function getVeniceModels(): Promise<VeniceModel[]> {
+export async function getVeniceModels(options?: { type?: VeniceModelType }): Promise<VeniceModel[]> {
   if (cachedModels && Date.now() - cachedAt < CACHE_TTL_MS) {
-    return cachedModels;
+    return options?.type ? cachedModels.filter((model) => matchesType(model, options.type!)) : cachedModels;
   }
 
   const apiKey = process.env.VENICE_API_KEY;
@@ -74,7 +120,7 @@ export async function getVeniceModels(): Promise<VeniceModel[]> {
     throw new Error("Missing VENICE_API_KEY");
   }
 
-  const response = await fetch("https://api.venice.ai/api/v1/models?type=image", {
+  const response = await fetch("https://api.venice.ai/api/v1/models", {
     headers: {
       Authorization: `Bearer ${apiKey}`
     }
@@ -99,14 +145,10 @@ export async function getVeniceModels(): Promise<VeniceModel[]> {
 
   const models = raw
     .map((item) => toModel(item))
-    .filter((item): item is VeniceModel => !!item)
-    .filter((item) => {
-      const type = inferModelType(item);
-      return type ? type.includes("image") : false;
-    });
+    .filter((item): item is VeniceModel => !!item);
 
   cachedModels = models;
   cachedAt = Date.now();
 
-  return models;
+  return options?.type ? models.filter((model) => matchesType(model, options.type!)) : models;
 }

@@ -139,7 +139,7 @@ export default function GenerateImagePage() {
       setModelsLoading(true);
       setModelsError(null);
       try {
-        const res = await fetch("/api/ai/venice/models");
+        const res = await fetch("/api/ai/venice/models?type=image");
         const payload = await res.json().catch(() => ({}));
         if (!res.ok) {
           throw new Error(payload?.error ?? "Failed to load models");
@@ -204,6 +204,15 @@ export default function GenerateImagePage() {
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
+  }, [selectedAsset]);
+
+  useEffect(() => {
+    if (!selectedAsset) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
   }, [selectedAsset]);
 
   useEffect(() => {
@@ -554,6 +563,7 @@ export default function GenerateImagePage() {
                     src={selectedAsset.signed_url}
                     alt={jobLabelMap.get(selectedAsset.job_id) ?? "Generated asset"}
                     className="max-h-[70vh] w-auto max-w-full object-contain"
+                    loading="eager"
                     onLoad={() => setLightboxLoading(false)}
                     onError={() => setLightboxLoading(false)}
                   />

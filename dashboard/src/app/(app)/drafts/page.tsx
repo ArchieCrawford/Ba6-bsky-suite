@@ -20,6 +20,8 @@ type DraftRow = {
 
 type AccountRow = { id: string; account_did: string; handle: string | null };
 
+const DRAFT_PREFILL_KEY = "ba6_draft_prefill";
+
 export default function DraftsPage() {
   const [drafts, setDrafts] = useState<DraftRow[]>([]);
   const [accounts, setAccounts] = useState<AccountRow[]>([]);
@@ -136,6 +138,15 @@ export default function DraftsPage() {
 
   useEffect(() => {
     loadData();
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = window.localStorage.getItem(DRAFT_PREFILL_KEY);
+    if (!stored) return;
+    setText(stored);
+    window.localStorage.removeItem(DRAFT_PREFILL_KEY);
+    newDraftRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
 
   if (loading) return <LoadingState label="Loading drafts" />;

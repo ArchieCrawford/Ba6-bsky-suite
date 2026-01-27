@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabaseServer";
 import { getVeniceModels } from "@/lib/veniceModels";
 
-const DEFAULT_MODEL = process.env.AI_DEFAULT_MODEL ?? "venice";
 const DAILY_LIMIT = Number(process.env.AI_DAILY_LIMIT ?? "25") || 25;
 
 type CreateJobRequest = {
@@ -67,24 +66,26 @@ export async function POST(request: Request) {
     }
 
     const body = (await request.json().catch(() => ({}))) as CreateJobRequest;
-    const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
-    if (!prompt) {
-      return NextResponse.json({ error: "Prompt is required" }, { status: 400 });
-    }
 
-    const models = await getVeniceModels();
-    const model = typeof body.model === "string" && body.model.trim() ? body.model.trim() : "";
+    const models = await getVeniceModels({ type: "image" });
     const validModels = new Set(models.map((m) => m.id));
-    if (!model || !validModels.has(model)) {
+    const modelId = typeof body.model === "string" ? body.model.trim() : "";
+    if (!modelId || !validModels.has(modelId)) {
       return NextResponse.json({ error: "Select a valid Venice image model." }, { status: 400 });
     }
+
+    const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
+    if (!prompt) {
+      return NextResponse.json({ error: "Prompt is required." }, { status: 400 });
+    }
+
     const { size, width, height } = parseSize(body.size);
-    const negativePrompt =
-      typeof body.negativePrompt === "string"
+    const negative_prompt =
+      typeof body.negativePrompt === "string" && body.negativePrompt.trim()
         ? body.negativePrompt.trim()
-        : typeof body.negative_prompt === "string"
+        : typeof body.negative_prompt === "string" && body.negative_prompt.trim()
           ? body.negative_prompt.trim()
-          : "";
+          : null;
 
     const { data: activeRows, error: activeError } = await supa
       .from("ai_jobs")
@@ -125,9 +126,9 @@ export async function POST(request: Request) {
         kind: "image",
         status: "queued",
         provider: "venice",
-        model,
+        model: modelId,
         prompt,
-        ...(negativePrompt ? { negative_prompt: negativePrompt } : {}),
+        negative_prompt,
         params
       })
       .select("id,status,model,prompt,negative_prompt,params,created_at")
