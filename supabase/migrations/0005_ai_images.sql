@@ -4,25 +4,19 @@ begin;
 create table if not exists public.ai_jobs (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
-
   kind text not null check (kind in ('image')),
   status text not null default 'queued' check (status in ('queued','running','succeeded','failed','canceled')),
-
   provider text not null default 'venice',
   model text not null,
-
   prompt text not null,
   negative_prompt text,
   params jsonb not null default '{}'::jsonb,
-
   provider_request_id text,
   error text,
-
   locked_at timestamptz,
   locked_by text,
   attempt_count int not null default 0,
   max_attempts int not null default 3,
-
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -35,14 +29,12 @@ create table if not exists public.ai_assets (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   job_id uuid not null references public.ai_jobs(id) on delete cascade,
-
   kind text not null check (kind in ('image')),
   storage_bucket text not null default 'ai',
   storage_path text not null,
   mime_type text not null default 'image/webp',
   width int,
   height int,
-
   created_at timestamptz not null default now()
 );
 
@@ -60,7 +52,7 @@ create table if not exists public.ai_job_events (
 
 create index if not exists ai_job_events_job_id_created_at_idx on public.ai_job_events (job_id, created_at asc);
 
--- 2) Updated-at trigger (reuse helper if present)
+-- 2) updated_at trigger
 create or replace function public.touch_updated_at()
 returns trigger language plpgsql as $$
 begin
@@ -74,7 +66,7 @@ create trigger ai_jobs_touch_updated_at
 before update on public.ai_jobs
 for each row execute function public.touch_updated_at();
 
--- 3) RLS
+-- 3) RLS for public tables
 alter table public.ai_jobs enable row level security;
 alter table public.ai_assets enable row level security;
 alter table public.ai_job_events enable row level security;
@@ -115,7 +107,7 @@ create or replace function public.claim_next_ai_image_job(
 returns setof public.ai_jobs
 language plpgsql
 security definer
-as $$
+as $fn$
 begin
   return query
   with candidate as (
@@ -139,27 +131,22 @@ begin
   where j.id = candidate.id
   returning j.*;
 end;
-$$;
+$fn$;
 
 revoke all on function public.claim_next_ai_image_job(int, text) from public;
 grant execute on function public.claim_next_ai_image_job(int, text) to service_role;
 
--- 5) Storage bucket + policies
--- Create bucket (idempotent)
+-- 5) Storage bucket + policies (NO ALTER TABLE storage.objects)
 insert into storage.buckets (id, name, public)
 values ('ai', 'ai', false)
 on conflict (id) do nothing;
 
--- Policies: users can read their own files under images/<uid>/...
--- Note: storage.objects.name is the full path within the bucket.
-
-do $$
+do $do$
 begin
-  -- SELECT
   if not exists (
     select 1 from pg_policies where schemaname='storage' and tablename='objects' and policyname='ai_objects_select_own'
   ) then
-    execute $$
+    execute $sql$
       create policy ai_objects_select_own
       on storage.objects
       for select
@@ -169,14 +156,13 @@ begin
         and (storage.foldername(name))[1] = 'images'
         and (storage.foldername(name))[2] = auth.uid()::text
       );
-    $$;
+    $sql$;
   end if;
 
-  -- INSERT
   if not exists (
     select 1 from pg_policies where schemaname='storage' and tablename='objects' and policyname='ai_objects_insert_own'
   ) then
-    execute $$
+    execute $sql$
       create policy ai_objects_insert_own
       on storage.objects
       for insert
@@ -186,14 +172,13 @@ begin
         and (storage.foldername(name))[1] = 'images'
         and (storage.foldername(name))[2] = auth.uid()::text
       );
-    $$;
+    $sql$;
   end if;
 
-  -- UPDATE
   if not exists (
     select 1 from pg_policies where schemaname='storage' and tablename='objects' and policyname='ai_objects_update_own'
   ) then
-    execute $$
+    execute $sql$
       create policy ai_objects_update_own
       on storage.objects
       for update
@@ -208,14 +193,13 @@ begin
         and (storage.foldername(name))[1] = 'images'
         and (storage.foldername(name))[2] = auth.uid()::text
       );
-    $$;
+    $sql$;
   end if;
 
-  -- DELETE
   if not exists (
     select 1 from pg_policies where schemaname='storage' and tablename='objects' and policyname='ai_objects_delete_own'
   ) then
-    execute $$
+    execute $sql$
       create policy ai_objects_delete_own
       on storage.objects
       for delete
@@ -225,8 +209,9 @@ begin
         and (storage.foldername(name))[1] = 'images'
         and (storage.foldername(name))[2] = auth.uid()::text
       );
-    $$;
+    $sql$;
   end if;
-end$$;
+end
+$do$;
 
 commit;
