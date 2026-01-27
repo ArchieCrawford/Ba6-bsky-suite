@@ -52,6 +52,44 @@ export default function LoginPage() {
     }
   };
 
+  const onSignUp = async () => {
+    if (!email.trim()) {
+      toast.error("Email is required");
+      return;
+    }
+    if (!password.trim()) {
+      toast.error("Password is required");
+      return;
+    }
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim(),
+        password: password.trim()
+      });
+      if (error) throw error;
+
+      if (data.session?.user) {
+        const profile = await ensureUserProfile();
+        if (!profile.ok) {
+          toast.error(profile.error ?? "Profile missing. Please retry from the dashboard.");
+        }
+        const profileRow = await ensureProfile();
+        if (!profileRow.ok) {
+          toast.error(profileRow.error ?? "Unable to sync profile data.");
+        }
+        toast.success("Account created");
+        router.replace("/dashboard");
+      } else {
+        toast.success("Check your email to confirm your account.");
+      }
+    } catch (err: any) {
+      toast.error(err?.message ?? "Unable to create account");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const signInWithWeb3 = async (chain: "solana" | "ethereum") => {
     if (chain === "solana") {
       const solana = (window as any)?.solana;
@@ -180,7 +218,7 @@ export default function LoginPage() {
         <div className="p-6 sm:p-8">
           <div className="text-xs uppercase tracking-[0.3em] text-black/40">BA6</div>
           <h1 className="mt-2 text-2xl font-semibold">Sign in to the control panel</h1>
-          <p className="mt-2 text-sm text-black/60">Use your email login.</p>
+          <p className="mt-2 text-sm text-black/60">Use your email login or create a new account.</p>
 
           <form className="mt-6 space-y-4" onSubmit={onSubmit}>
             <div>
@@ -203,6 +241,9 @@ export default function LoginPage() {
             </div>
             <Button type="submit" disabled={loading} className="w-full">
               {loading ? "Signing in..." : "Sign in"}
+            </Button>
+            <Button type="button" variant="secondary" disabled={loading} className="w-full" onClick={onSignUp}>
+              {loading ? "Creating..." : "Create account"}
             </Button>
           </form>
 

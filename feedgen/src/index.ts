@@ -34,8 +34,9 @@ function escapeFilterValue(value: string) {
 
 function normalizeFeedSlug(feed: string) {
   if (!feed) return null;
+  const generatorPattern = /^at:\/\/[^/]+\/app\.bsky\.feed\.generator\/([^/?#]+)/i;
   if (feed.startsWith("at://")) {
-    const match = feed.match(/^at:\/\/[^/]+\/app\\.bsky\\.feed\\.generator\\/([^/?#]+)/i);
+    const match = feed.match(generatorPattern);
     if (match?.[1]) {
       return decodeURIComponent(match[1]);
     }
