@@ -15,9 +15,37 @@ const plex = IBM_Plex_Sans({
   weight: ["300", "400", "500", "600", "700"]
 });
 
+const siteUrl =
+  process.env.NEXT_PUBLIC_SITE_URL ??
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://ba6-bsky-suite.com");
+
+const metaTitle = "BA6 Bluesky Ops Console";
+const metaDescription =
+  "Operate Bluesky scheduling, feeds, and automation from the BA6 control panel.";
+
 export const metadata: Metadata = {
-  title: "BA6 Control Panel",
-  description: "Supabase-backed Bluesky scheduling and feed operations"
+  metadataBase: new URL(siteUrl),
+  title: metaTitle,
+  description: metaDescription,
+  openGraph: {
+    title: metaTitle,
+    description: metaDescription,
+    type: "website",
+    images: [
+      {
+        url: "/LinkCover.png",
+        width: 1200,
+        height: 630,
+        alt: "BA6 Bluesky Ops Console"
+      }
+    ]
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: metaTitle,
+    description: metaDescription,
+    images: ["/LinkCover.png"]
+  }
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
