@@ -12,6 +12,7 @@
     "@atproto/api": "^0.18.17",
     "@magic-ext/solana": "^30.0.0",
     "@supabase/supabase-js": "^2.45.4",
+    "ba6-bsky-suite": "file:..",
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
     "lucide-react": "^0.439.0",
