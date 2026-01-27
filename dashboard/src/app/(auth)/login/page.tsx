@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import Ba6Mascot from "../../../../assets/Ba6.png";
 import { ensureUserProfile } from "@/lib/ensureUserProfile";
+import { ensureProfile } from "@/lib/ensureProfile";
+import { useSupabaseAuth } from "@/lib/useSupabaseAuth";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
@@ -13,9 +15,16 @@ import { toast } from "sonner";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { session } = useSupabaseAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (session) {
+      router.replace("/dashboard");
+    }
+  }, [session, router]);
 
   const onSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -29,9 +38,55 @@ export default function LoginPage() {
       } else {
         toast.success("Signed in");
       }
+      const profileRow = await ensureProfile();
+      if (!profileRow.ok) {
+        toast.error(profileRow.error ?? "Unable to sync profile data.");
+      }
       router.replace("/dashboard");
     } catch (err: any) {
       toast.error(err?.message ?? "Unable to sign in");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const signInWithWeb3 = async (chain: "solana" | "ethereum") => {
+    if (chain === "solana") {
+      const solana = (window as any)?.solana;
+      if (!solana || !solana.isPhantom) {
+        toast.error("Install Phantom to sign in with Solana.");
+        return;
+      }
+    }
+    if (chain === "ethereum") {
+      const ethereum = (window as any)?.ethereum;
+      if (!ethereum || !ethereum.isMetaMask) {
+        toast.error("Install MetaMask to sign in with Ethereum.");
+        return;
+      }
+    }
+
+    setLoading(true);
+    try {
+      const { error } = await (supabase.auth as any).signInWithWeb3({
+        chain,
+        statement: "I accept the Terms of Service at https://ba6-bsky-suite.com/tos"
+      });
+      if (error) throw error;
+
+      const profile = await ensureUserProfile();
+      if (!profile.ok) {
+        toast.error(profile.error ?? "Profile missing. Please retry from the dashboard.");
+      }
+      const profileRow = await ensureProfile();
+      if (!profileRow.ok) {
+        toast.error(profileRow.error ?? "Unable to sync profile data.");
+      } else {
+        toast.success("Signed in");
+      }
+      router.replace("/dashboard");
+    } catch (err: any) {
+      toast.error(err?.message ?? "Unable to sign in with wallet");
     } finally {
       setLoading(false);
     }
@@ -84,6 +139,27 @@ export default function LoginPage() {
               {loading ? "Signing in..." : "Sign in"}
             </Button>
           </form>
+
+          <div className="mt-6 space-y-3">
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full"
+              disabled={loading}
+              onClick={() => signInWithWeb3("solana")}
+            >
+              Sign in with Solana (Phantom)
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full"
+              disabled={loading}
+              onClick={() => signInWithWeb3("ethereum")}
+            >
+              Sign in with Ethereum (MetaMask)
+            </Button>
+          </div>
         </div>
       </div>
     </Card>
