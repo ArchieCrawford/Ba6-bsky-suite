@@ -116,7 +116,7 @@ export async function POST(request: Request) {
     }
 
     const supa = createSupabaseServerClient(token);
-    const { data, error: authError } = await supa.auth.getUser(token);
+    const { data, error: authError } = await supa.auth.getUser();
     if (authError || !data.user) {
       return NextResponse.json({ error: "Invalid auth token" }, { status: 401 });
     }

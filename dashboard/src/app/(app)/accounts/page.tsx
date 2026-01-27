@@ -33,6 +33,17 @@ export default function AccountsPage() {
   const [saving, setSaving] = useState(false);
   const [walletSaving, setWalletSaving] = useState(false);
 
+  const isMissingSecretRpc = (err: any) => {
+    const code = err?.code;
+    const message = String(err?.message ?? "").toLowerCase();
+    return (
+      code === "PGRST202" ||
+      code === "PGRST205" ||
+      message.includes("could not find the function") ||
+      message.includes("create_account_secret")
+    );
+  };
+
   const resolveHandle = async (value: string) => {
     const res = await fetch(
       `https://bsky.social/xrpc/com.atproto.identity.resolveHandle?handle=${encodeURIComponent(value)}`
@@ -65,22 +76,38 @@ export default function AccountsPage() {
 
       const did = await resolveHandle(handle.trim());
       const makeActive = accounts.length === 0;
+      let vaultSecretId: string | null = null;
+      let storePlaintext = false;
+
       const { data: secretId, error: secretError } = await supabase.rpc("create_account_secret", {
         secret: appPassword.trim(),
         name: `bsky:${handle.trim()}`,
         description: `Bluesky app password for ${handle.trim()}`
       });
-      if (secretError) throw secretError;
-      if (!secretId) throw new Error("Unable to store app password");
+      if (secretError) {
+        if (isMissingSecretRpc(secretError)) {
+          storePlaintext = true;
+        } else {
+          throw secretError;
+        }
+      } else if (secretId) {
+        vaultSecretId = String(secretId);
+      } else {
+        storePlaintext = true;
+      }
 
       const { error: insertError } = await supabase.from("accounts").insert({
         user_id: userId,
         account_did: did,
         handle: handle.trim(),
-        vault_secret_id: secretId,
+        ...(vaultSecretId ? { vault_secret_id: vaultSecretId } : {}),
+        ...(storePlaintext ? { app_password: appPassword.trim() } : {}),
         is_active: makeActive
       });
       if (insertError) throw insertError;
+      if (storePlaintext) {
+        toast("Vault unavailable. Stored app password on your account row.");
+      }
       toast.success("Account connected");
       setHandle("");
       setAppPassword("");
@@ -225,7 +252,7 @@ export default function AccountsPage() {
           {saving ? "Saving..." : "Connect account"}
         </Button>
         <div className="text-xs text-black/50">
-          App passwords are stored in Supabase Vault and only decrypted for authenticated services.
+          App passwords are stored in Supabase Vault when available, otherwise they are saved on your account row.
         </div>
       </Card>
 
