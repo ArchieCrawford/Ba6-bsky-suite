@@ -16,7 +16,6 @@ type AccountRow = {
   id: string;
   account_did: string;
   handle: string | null;
-  label: string | null;
   is_active: boolean;
   created_at: string;
   last_auth_at: string | null;
@@ -30,7 +29,6 @@ export default function AccountsPage() {
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<"handle" | "last_auth">("handle");
   const [handle, setHandle] = useState("");
-  const [label, setLabel] = useState("");
   const [appPassword, setAppPassword] = useState("");
   const [saving, setSaving] = useState(false);
   const [walletSaving, setWalletSaving] = useState(false);
@@ -79,14 +77,12 @@ export default function AccountsPage() {
         user_id: userId,
         account_did: did,
         handle: handle.trim(),
-        label: label.trim() || null,
         vault_secret_id: secretId,
         is_active: makeActive
       });
       if (insertError) throw insertError;
       toast.success("Account connected");
       setHandle("");
-      setLabel("");
       setAppPassword("");
       await loadData();
     } catch (err: any) {
@@ -117,7 +113,7 @@ export default function AccountsPage() {
   };
 
   const disconnectAccount = async (account: AccountRow) => {
-    if (!confirm(`Disconnect ${account.label ?? account.handle ?? account.account_did}?`)) return;
+    if (!confirm(`Disconnect ${account.handle ?? account.account_did}?`)) return;
     setSaving(true);
     try {
       const { error: deleteError } = await supabase.from("accounts").delete().eq("id", account.id);
@@ -138,7 +134,7 @@ export default function AccountsPage() {
       const [accountRes, walletRes] = await Promise.all([
         supabase
           .from("accounts")
-          .select("id,account_did,handle,label,is_active,created_at,last_auth_at")
+          .select("id,account_did,handle,is_active,created_at,last_auth_at")
           .order("created_at", { ascending: false }),
         fetchWallets()
       ]);
@@ -163,7 +159,7 @@ export default function AccountsPage() {
     if (term) {
       filtered = accounts.filter((account) => {
         return (
-          (account.label ?? account.handle ?? "").toLowerCase().includes(term) ||
+          (account.handle ?? "").toLowerCase().includes(term) ||
           account.account_did.toLowerCase().includes(term)
         );
       });
@@ -174,7 +170,7 @@ export default function AccountsPage() {
         const bAuth = b.last_auth_at ?? "";
         return bAuth.localeCompare(aAuth);
       }
-      return (a.label ?? a.handle ?? a.account_did).localeCompare(b.label ?? b.handle ?? b.account_did);
+      return (a.handle ?? a.account_did).localeCompare(b.handle ?? b.account_did);
     });
   }, [accounts, search, sortKey]);
 
@@ -220,12 +216,9 @@ export default function AccountsPage() {
             />
           </div>
           <div className="sm:col-span-2">
-            <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Label (optional)</label>
-            <Input
-              placeholder="Primary account"
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-            />
+            <div className="text-xs text-black/50">
+              Handle is used as the display name. Add labels in your notes if needed.
+            </div>
           </div>
         </div>
         <Button onClick={connectAccount} disabled={saving} className="w-full sm:w-auto">
@@ -328,7 +321,7 @@ export default function AccountsPage() {
               return (
                 <MobileCard
                   key={account.id}
-                  title={account.label ?? account.handle ?? "Unnamed account"}
+                  title={account.handle ?? "Unnamed account"}
                   subtitle={account.account_did}
                   status={
                     <span className={`text-xs font-semibold ${isActive ? "text-emerald-600" : "text-rose-600"}`}>
@@ -389,10 +382,10 @@ export default function AccountsPage() {
                 const lastAuthAt = account.last_auth_at ? new Date(account.last_auth_at) : null;
                 const isActive = account.is_active;
                 return (
-                  <div key={account.id} className="grid grid-cols-12 items-center gap-2 px-4 py-3 text-sm">
-                    <div className="col-span-4 font-semibold text-ink">
-                      {account.label ?? account.handle ?? "Unnamed account"}
-                    </div>
+                <div key={account.id} className="grid grid-cols-12 items-center gap-2 px-4 py-3 text-sm">
+                  <div className="col-span-4 font-semibold text-ink">
+                      {account.handle ?? "Unnamed account"}
+                  </div>
                     <div className="col-span-4 text-xs text-black/60 break-all">{account.account_did}</div>
                     <div className={`col-span-2 text-xs ${isActive ? "text-emerald-600" : "text-rose-600"}`}>
                       {isActive ? "Active" : "Inactive"}

@@ -10,7 +10,7 @@
     "publish-feed": "tsx src/publishFeed.ts"
   },
   "dependencies": {
-    "@atproto/api": "^0.13.25",
+    "@atproto/api": "^0.18.17",
     "@supabase/supabase-js": "^2.45.4",
     "dotenv": "^16.4.5"
   },
@@ -18,5 +18,4 @@
     "tsx": "^4.16.2",
     "typescript": "^5.5.4"
   }
-  
 }
