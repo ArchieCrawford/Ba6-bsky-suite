@@ -12,6 +12,7 @@
   "dependencies": {
     "@atproto/api": "^0.18.17",
     "@supabase/supabase-js": "^2.45.4",
+    "ba6-bsky-suite": "file:..",
     "dotenv": "^16.4.5"
   },
   "devDependencies": {
