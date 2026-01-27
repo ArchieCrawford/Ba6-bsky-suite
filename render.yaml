@@ -14,8 +14,6 @@ services:
         sync: false
       - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
         sync: false
-      - key: AI_DAILY_LIMIT
-        sync: false
 
   - type: web
     name: ba6-bsky-feedgen
@@ -30,7 +28,7 @@ services:
         value: 20
       - key: SUPABASE_URL
         sync: false
-      - key: SUPABASE_SERVICE_ROLE_KEY
+      - key: SUPABASE_ANON_KEY
         sync: false
 
   - type: worker
@@ -48,11 +46,11 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
-      - key: BSKY_HANDLE
-        sync: false
-      - key: BSKY_APP_PASSWORD
-        sync: false
       - key: VENICE_API_KEY
         sync: false
       - key: AI_DAILY_LIMIT
+        value: "25"
+      - key: BSKY_HANDLE
+        sync: false
+      - key: BSKY_APP_PASSWORD
         sync: false
