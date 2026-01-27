@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/States";
 import { toast } from "sonner";
+import { connectEthereum, connectSolana } from "@/lib/magic";
+import { ensureUserAndWallet, fetchWallets, type WalletRow } from "@/lib/db";
 
 type AccountRow = {
   id: string;
@@ -22,6 +24,7 @@ type AccountRow = {
 
 export default function AccountsPage() {
   const [accounts, setAccounts] = useState<AccountRow[]>([]);
+  const [wallets, setWallets] = useState<WalletRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -30,6 +33,7 @@ export default function AccountsPage() {
   const [label, setLabel] = useState("");
   const [appPassword, setAppPassword] = useState("");
   const [saving, setSaving] = useState(false);
+  const [walletSaving, setWalletSaving] = useState(false);
 
   const resolveHandle = async (value: string) => {
     const res = await fetch(
@@ -131,12 +135,19 @@ export default function AccountsPage() {
     setLoading(true);
     setError(null);
     try {
-      const { data: accountRows, error: accountError } = await supabase
-        .from("accounts")
-        .select("id,account_did,handle,label,is_active,created_at,last_auth_at")
-        .order("created_at", { ascending: false });
-      if (accountError) throw accountError;
-      setAccounts((accountRows ?? []) as AccountRow[]);
+      const [accountRes, walletRes] = await Promise.all([
+        supabase
+          .from("accounts")
+          .select("id,account_did,handle,label,is_active,created_at,last_auth_at")
+          .order("created_at", { ascending: false }),
+        fetchWallets()
+      ]);
+      if (accountRes.error) throw accountRes.error;
+      setAccounts((accountRes.data ?? []) as AccountRow[]);
+      if (!walletRes.ok) {
+        throw new Error(walletRes.error);
+      }
+      setWallets(walletRes.wallets);
     } catch (err: any) {
       const message = err?.message ?? "Failed to load accounts";
       setError(message);
@@ -222,6 +233,67 @@ export default function AccountsPage() {
         </Button>
         <div className="text-xs text-black/50">
           App passwords are stored in Supabase Vault and only decrypted for authenticated services.
+        </div>
+      </Card>
+
+      <Card className="space-y-4">
+        <div className="text-sm font-semibold uppercase tracking-wide text-black/50">Wallet identity (Magic)</div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Button
+            variant="secondary"
+            className="w-full"
+            disabled={walletSaving}
+            onClick={async () => {
+              const email = window.prompt("Enter your email for Magic");
+              if (!email?.trim()) {
+                toast.error("Email is required to connect Magic");
+                return;
+              }
+              setWalletSaving(true);
+              try {
+                const wallet = await connectEthereum(email.trim());
+                const linked = await ensureUserAndWallet({ ...wallet, setDefault: true });
+                if (!linked.ok) throw new Error(linked.error);
+                toast.success("Magic Ethereum connected");
+                await loadData();
+              } catch (err: any) {
+                toast.error(err?.message ?? "Failed to connect Ethereum wallet");
+              } finally {
+                setWalletSaving(false);
+              }
+            }}
+          >
+            Connect Magic Ethereum
+          </Button>
+          <Button
+            variant="secondary"
+            className="w-full"
+            disabled={walletSaving}
+            onClick={async () => {
+              const email = window.prompt("Enter your email for Magic");
+              if (!email?.trim()) {
+                toast.error("Email is required to connect Magic");
+                return;
+              }
+              setWalletSaving(true);
+              try {
+                const wallet = await connectSolana(email.trim());
+                const linked = await ensureUserAndWallet({ ...wallet, setDefault: true });
+                if (!linked.ok) throw new Error(linked.error);
+                toast.success("Magic Solana connected");
+                await loadData();
+              } catch (err: any) {
+                toast.error(err?.message ?? "Failed to connect Solana wallet");
+              } finally {
+                setWalletSaving(false);
+              }
+            }}
+          >
+            Connect Magic Solana
+          </Button>
+        </div>
+        <div className="text-xs text-black/50">
+          Magic wallets are linked to your user profile for future payments gating.
         </div>
       </Card>
 
@@ -349,6 +421,56 @@ export default function AccountsPage() {
                   </div>
                 );
               })}
+            </div>
+          </Card>
+        </>
+      )}
+
+      {wallets.length === 0 ? (
+        <EmptyState title="No wallets" subtitle="Connect a Magic wallet to link your identity." />
+      ) : (
+        <>
+          <div className="space-y-3 sm:hidden">
+            {wallets.map((wallet) => (
+              <MobileCard
+                key={wallet.id}
+                title={`${wallet.chain} (${wallet.provider})`}
+                subtitle={wallet.address}
+                status={
+                  <span className={`text-xs font-semibold ${wallet.is_default ? "text-emerald-600" : "text-black/40"}`}>
+                    {wallet.is_default ? "Default" : "Linked"}
+                  </span>
+                }
+                details={
+                  <>
+                    <div>Network: {wallet.network ?? "unknown"}</div>
+                    <div>Verified: {wallet.is_verified ? "Yes" : "No"}</div>
+                  </>
+                }
+              />
+            ))}
+          </div>
+
+          <Card className="hidden sm:block">
+            <div className="grid grid-cols-12 gap-2 border-b border-black/10 bg-sand/60 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-black/50">
+              <div className="col-span-3">Chain</div>
+              <div className="col-span-5">Address</div>
+              <div className="col-span-2">Default</div>
+              <div className="col-span-2">Network</div>
+            </div>
+            <div className="divide-y divide-black/5">
+              {wallets.map((wallet) => (
+                <div key={wallet.id} className="grid grid-cols-12 items-center gap-2 px-4 py-3 text-sm">
+                  <div className="col-span-3 font-semibold text-ink capitalize">
+                    {wallet.chain} ({wallet.provider})
+                  </div>
+                  <div className="col-span-5 text-xs text-black/60 break-all">{wallet.address}</div>
+                  <div className="col-span-2 text-xs text-black/60">
+                    {wallet.is_default ? "Default" : "Linked"}
+                  </div>
+                  <div className="col-span-2 text-xs text-black/60">{wallet.network ?? "-"}</div>
+                </div>
+              ))}
             </div>
           </Card>
         </>

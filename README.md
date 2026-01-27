@@ -37,6 +37,17 @@ cp dashboard/.env.example dashboard/.env.local
 - Ownership is enforced through `user_id` foreign keys on `accounts`, `drafts`, `scheduled_posts`, and `feeds`.
 - `accounts` stores Bluesky app passwords in Supabase Vault (RLS enforced). Never expose the service role key or secrets to clients.
 
+## Wallet identity (Magic)
+
+The dashboard links Magic wallets to `public.wallets` after Supabase login. This keeps Supabase as the primary auth system while storing wallet identities for future payments.
+
+Future flow (not implemented yet):
+
+1) Client requests a nonce: `GET /api/wallet/nonce`
+2) User signs the nonce with their wallet
+3) Client submits signature to `POST /api/wallet/verify`
+4) Server validates signature, then gates paid features based on `wallets.is_verified` + billing fields
+
 ## Supabase migration
 
 Run the migration in the Supabase dashboard SQL editor, or with the Supabase CLI:

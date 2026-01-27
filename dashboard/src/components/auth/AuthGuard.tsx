@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { ErrorState, LoadingState } from "@/components/ui/States";
 import { toast } from "sonner";
 import { ensureUserProfile } from "@/lib/ensureUserProfile";
+import { linkPendingWallets } from "@/lib/db";
 
 export function AuthGuard({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -28,6 +29,10 @@ export function AuthGuard({ children }: { children: ReactNode }) {
       if (!profile.ok) {
         setProfileError(profile.error);
         return;
+      }
+      const linked = await linkPendingWallets();
+      if (!linked.ok) {
+        toast.error(linked.error ?? "Wallet linking failed");
       }
       setProfileError(null);
       setReady(true);
