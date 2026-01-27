@@ -26,7 +26,7 @@ type FeedRow = {
   id: string;
   user_id: string;
   slug: string;
-  title: string | null;
+  display_name: string | null;
   description: string | null;
 };
 
@@ -68,7 +68,7 @@ async function fetchFeed(supa: SupabaseClientAny, input: PublishRequest, userId:
   if (!input.feedId && !input.slug) {
     throw new Error("Missing feed id or slug");
   }
-  let query = supa.from("feeds").select("id,user_id,slug,title,description").eq("user_id", userId);
+  let query = supa.from("feeds").select("id,user_id,slug,display_name,description").eq("user_id", userId);
   if (input.feedId) {
     query = query.eq("id", input.feedId);
   } else if (input.slug) {
@@ -167,7 +167,7 @@ export async function POST(request: Request) {
       typeof existingRecord?.createdAt === "string" ? existingRecord.createdAt : new Date().toISOString();
     const record = {
       did: feedgenDid,
-      displayName: feed.title ?? feed.slug,
+      displayName: feed.display_name ?? feed.slug,
       ...(feed.description ? { description: feed.description } : {}),
       createdAt
     };

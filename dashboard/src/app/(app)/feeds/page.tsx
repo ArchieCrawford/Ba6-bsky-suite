@@ -29,7 +29,7 @@ const matchesKeyword = (text: string, keyword: string) => {
 type FeedRow = {
   id: string;
   slug: string;
-  title: string | null;
+  display_name: string | null;
   description: string | null;
   is_enabled: boolean;
 };
@@ -71,7 +71,7 @@ export default function FeedsPage() {
       filtered = feeds.filter((feed) => {
         return (
           feed.slug.toLowerCase().includes(term) ||
-          (feed.title ?? "").toLowerCase().includes(term) ||
+          (feed.display_name ?? "").toLowerCase().includes(term) ||
           feed.description?.toLowerCase().includes(term)
         );
       });
@@ -90,7 +90,7 @@ export default function FeedsPage() {
     try {
       const { data, error: feedError } = await supabase
         .from("feeds")
-        .select("id,slug,title,description,is_enabled")
+        .select("id,slug,display_name,description,is_enabled")
         .order("created_at", { ascending: false });
       if (feedError) throw feedError;
       const feedRows = (data ?? []) as FeedRow[];
@@ -415,7 +415,7 @@ export default function FeedsPage() {
               {filteredFeeds.map((feed) => (
                 <MobileCard
                   key={feed.id}
-                  title={feed.title ?? "Untitled feed"}
+                  title={feed.display_name ?? "Untitled feed"}
                   subtitle={`/${feed.slug}`}
                   status={
                     <span className={`text-xs font-semibold ${feed.is_enabled ? "text-emerald-600" : "text-rose-600"}`}>
@@ -454,7 +454,7 @@ export default function FeedsPage() {
               {filteredFeeds.map((feed) => (
                 <div key={feed.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
                   <div>
-                    <div className="text-sm font-semibold text-ink">{feed.title ?? "Untitled feed"}</div>
+                  <div className="text-sm font-semibold text-ink">{feed.display_name ?? "Untitled feed"}</div>
                     <div className="text-xs text-black/50">/{feed.slug}</div>
                   </div>
                   <div className="flex gap-2">
