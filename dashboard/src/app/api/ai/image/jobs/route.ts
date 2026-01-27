@@ -1,15 +1,19 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabaseServer";
+import { getVeniceModels } from "@/lib/veniceModels";
 
 const DEFAULT_MODEL = process.env.AI_DEFAULT_MODEL ?? "venice";
 const DAILY_LIMIT = Number(process.env.AI_DAILY_LIMIT ?? "25") || 25;
 
 type CreateJobRequest = {
+  label?: string;
   prompt?: string;
   negativePrompt?: string;
   negative_prompt?: string;
   model?: string;
   size?: string;
+  width?: number | string;
+  height?: number | string;
   params?: Record<string, unknown>;
 };
 
@@ -40,6 +44,15 @@ function parseSize(size: string | undefined) {
   };
 }
 
+function parseNumber(value?: number | string) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+}
+
 export async function POST(request: Request) {
   try {
     const token = getBearerToken(request);
@@ -59,7 +72,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Prompt is required" }, { status: 400 });
     }
 
-    const model = typeof body.model === "string" && body.model.trim() ? body.model.trim() : DEFAULT_MODEL;
+    const models = await getVeniceModels();
+    const model = typeof body.model === "string" && body.model.trim() ? body.model.trim() : "";
+    const validModels = new Set(models.map((m) => m.id));
+    if (!model || !validModels.has(model)) {
+      return NextResponse.json({ error: "Select a valid Venice image model." }, { status: 400 });
+    }
     const { size, width, height } = parseSize(body.size);
     const negativePrompt =
       typeof body.negativePrompt === "string"
@@ -89,11 +107,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Daily limit reached." }, { status: 429 });
     }
 
+    const label = typeof body.label === "string" ? body.label.trim() : "";
+    const explicitWidth = parseNumber(body.width);
+    const explicitHeight = parseNumber(body.height);
     const params = {
       ...(body.params ?? {}),
+      ...(label ? { label } : {}),
       size,
-      width,
-      height
+      width: explicitWidth ?? width,
+      height: explicitHeight ?? height
     };
 
     const { data: job, error: insertError } = await supa

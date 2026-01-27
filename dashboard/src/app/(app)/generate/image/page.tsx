@@ -51,6 +51,14 @@ const SIZE_OPTIONS = [
   { label: "720 × 1280", value: "720x1280" }
 ];
 
+type VeniceModel = {
+  id: string;
+  name?: string;
+  description?: string;
+  type?: string;
+  model_spec?: unknown;
+};
+
 const STATUS_STYLES: Record<string, string> = {
   queued: "border-amber-200 bg-amber-100 text-amber-700",
   running: "border-sky-200 bg-sky-100 text-sky-700",
@@ -79,6 +87,8 @@ async function getAuthHeaders() {
   return { Authorization: `Bearer ${data.session.access_token}` };
 }
 
+const MODEL_STORAGE_KEY = "ba6_ai_image_model";
+
 export default function GenerateImagePage() {
   const [jobs, setJobs] = useState<AiJob[]>([]);
   const [assets, setAssets] = useState<AiAsset[]>([]);
@@ -86,10 +96,16 @@ export default function GenerateImagePage() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [models, setModels] = useState<VeniceModel[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(true);
+  const [modelsError, setModelsError] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
   const [negativePrompt, setNegativePrompt] = useState("");
-  const [model, setModel] = useState("venice");
+  const [label, setLabel] = useState("");
+  const [modelId, setModelId] = useState("");
   const [size, setSize] = useState(SIZE_OPTIONS[0].value);
+  const [selectedAsset, setSelectedAsset] = useState<AiAsset | null>(null);
+  const [lightboxLoading, setLightboxLoading] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -117,8 +133,59 @@ export default function GenerateImagePage() {
     loadData();
   }, [loadData]);
 
+  useEffect(() => {
+    let active = true;
+    const fetchModels = async () => {
+      setModelsLoading(true);
+      setModelsError(null);
+      try {
+        const res = await fetch("/api/ai/venice/models");
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(payload?.error ?? "Failed to load models");
+        }
+        if (!active) return;
+        const list = (payload.models ?? []) as VeniceModel[];
+        setModels(list);
+        const stored = typeof window !== "undefined" ? window.localStorage.getItem(MODEL_STORAGE_KEY) : null;
+        const defaultModel = list.find((item) => item.id === stored) ?? list[0];
+        if (defaultModel) {
+          setModelId(defaultModel.id);
+        }
+      } catch (err: any) {
+        if (!active) return;
+        setModelsError(err?.message ?? "Unable to fetch Venice models");
+      } finally {
+        if (active) {
+          setModelsLoading(false);
+        }
+      }
+    };
+    fetchModels();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (modelId && typeof window !== "undefined") {
+      window.localStorage.setItem(MODEL_STORAGE_KEY, modelId);
+    }
+  }, [modelId]);
+
   const activeJob = useMemo(() => jobs.find((job) => ["queued", "running"].includes(job.status)), [jobs]);
   const limitReached = usage ? usage.used_today >= usage.daily_limit : false;
+
+  const jobLabelMap = useMemo(() => {
+    const map = new Map<string, string>();
+    jobs.forEach((job) => {
+      const labelValue = (job.params as any)?.label;
+      if (typeof labelValue === "string" && labelValue.trim()) {
+        map.set(job.id, labelValue.trim());
+      }
+    });
+    return map;
+  }, [jobs]);
 
   useEffect(() => {
     if (!activeJob) return;
@@ -128,7 +195,45 @@ export default function GenerateImagePage() {
     return () => clearInterval(interval);
   }, [activeJob, loadData]);
 
+  useEffect(() => {
+    if (!selectedAsset) return;
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSelectedAsset(null);
+      }
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [selectedAsset]);
+
+  useEffect(() => {
+    if (!selectedAsset) {
+      setLightboxLoading(false);
+    }
+  }, [selectedAsset]);
+
+  const downloadFromUrl = async (url: string, filename: string) => {
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const objectUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(objectUrl);
+    } catch {
+      window.open(url, "_blank");
+    }
+  };
+
   const submitJob = async () => {
+    if (!modelId) {
+      toast.error("Select a Venice model");
+      return;
+    }
     if (!prompt.trim()) {
       toast.error("Prompt is required");
       return;
@@ -152,9 +257,10 @@ export default function GenerateImagePage() {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
+          label: label.trim() || undefined,
           prompt: prompt.trim(),
           negativePrompt: negativePrompt.trim() || undefined,
-          model: model.trim() || "venice",
+          model: modelId,
           size
         })
       });
@@ -165,6 +271,7 @@ export default function GenerateImagePage() {
       toast.success("Image job queued");
       setPrompt("");
       setNegativePrompt("");
+      setLabel("");
       await loadData();
     } catch (err: any) {
       toast.error(err?.message ?? "Failed to create job");
@@ -205,32 +312,68 @@ export default function GenerateImagePage() {
       <Card>
         <div className="text-sm font-semibold uppercase tracking-wide text-black/50">New image</div>
         <div className="mt-4 grid gap-4">
+          <div>
+            <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Title / Label (optional)</label>
+            <Input
+              placeholder="BA6 visual concept"
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Prompt</label>
           <Textarea
             rows={4}
             placeholder="Describe the image you want to generate..."
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
           />
-          <Input
-            placeholder="Negative prompt (optional)"
-            value={negativePrompt}
-            onChange={(e) => setNegativePrompt(e.target.value)}
-          />
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Input
-              placeholder="Model (per Venice docs)"
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
+          </div>
+          <div>
+            <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Negative prompt (optional)</label>
+            <Textarea
+              rows={2}
+              placeholder="What should the model avoid?"
+              value={negativePrompt}
+              onChange={(e) => setNegativePrompt(e.target.value)}
             />
-            <Select value={size} onChange={(e) => setSize(e.target.value)}>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Model</label>
+              <Select
+                value={modelId}
+                onChange={(e) => setModelId(e.target.value)}
+                disabled={modelsLoading || models.length === 0}
+                required
+              >
+                {models.map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {model.name ? `${model.name} — ${model.id}` : model.id}
+                  </option>
+                ))}
+              </Select>
+              {modelsError && <div className="mt-2 text-xs text-rose-600">{modelsError}</div>}
+              {!modelsError && models.length === 0 && !modelsLoading && (
+                <div className="mt-2 text-xs text-rose-600">No image models available.</div>
+              )}
+            </div>
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Size</label>
+              <Select value={size} onChange={(e) => setSize(e.target.value)}>
               {SIZE_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
                 </option>
               ))}
             </Select>
+            </div>
           </div>
-          <Button onClick={submitJob} disabled={creating || !!activeJob || limitReached} className="w-full sm:w-auto">
+          <Button
+            onClick={submitJob}
+            disabled={creating || !!activeJob || limitReached || models.length === 0}
+            className="w-full sm:w-auto"
+          >
             {creating ? "Queueing..." : "Generate image"}
           </Button>
         </div>
@@ -257,11 +400,17 @@ export default function GenerateImagePage() {
               {jobs.map((job) => (
                 <MobileCard
                   key={job.id}
-                  title={job.prompt.slice(0, 70)}
+                  title={(jobLabelMap.get(job.id) ?? job.prompt).slice(0, 70)}
                   subtitle={formatDistanceToNow(new Date(job.created_at), { addSuffix: true })}
                   status={<StatusPill status={job.status} />}
                   details={
                     <div className="space-y-2">
+                      {jobLabelMap.get(job.id) && (
+                        <div>
+                          <div className="text-[11px] uppercase text-black/40">Label</div>
+                          <div>{jobLabelMap.get(job.id)}</div>
+                        </div>
+                      )}
                       <div>
                         <div className="text-[11px] uppercase text-black/40">Model</div>
                         <div>{job.model}</div>
@@ -291,11 +440,14 @@ export default function GenerateImagePage() {
               {jobs.map((job) => (
                 <div key={job.id} className="flex items-start justify-between gap-4 py-4">
                   <div className="space-y-1">
-                    <div className="text-sm font-semibold text-ink">{job.prompt}</div>
+                    <div className="text-sm font-semibold text-ink">{jobLabelMap.get(job.id) ?? job.prompt}</div>
                     <div className="text-xs text-black/50">
                       {job.provider} · {job.model} ·{" "}
                       {formatDistanceToNow(new Date(job.created_at), { addSuffix: true })}
                     </div>
+                    {jobLabelMap.get(job.id) && (
+                      <div className="text-xs text-black/50">Label: {jobLabelMap.get(job.id)}</div>
+                    )}
                     {job.negative_prompt && (
                       <div className="text-xs text-black/50">Negative: {job.negative_prompt}</div>
                     )}
@@ -320,8 +472,12 @@ export default function GenerateImagePage() {
                 {asset.signed_url ? (
                   <img
                     src={asset.signed_url}
-                    alt="Generated asset"
-                    className="h-48 w-full object-cover"
+                    alt={jobLabelMap.get(asset.job_id) ?? "Generated asset"}
+                    className="h-48 w-full cursor-pointer object-cover"
+                    onClick={() => {
+                      setSelectedAsset(asset);
+                      setLightboxLoading(true);
+                    }}
                   />
                 ) : (
                   <div className="flex h-48 items-center justify-center bg-black/5 text-xs text-black/40">
@@ -329,6 +485,9 @@ export default function GenerateImagePage() {
                   </div>
                 )}
                 <div className="space-y-1 px-3 py-2 text-xs text-black/60">
+                  <div className="text-[11px] uppercase text-black/40">
+                    {jobLabelMap.get(asset.job_id) ?? "Generated asset"}
+                  </div>
                   <div>{formatDistanceToNow(new Date(asset.created_at), { addSuffix: true })}</div>
                   {asset.width && asset.height && (
                     <div>
@@ -341,6 +500,90 @@ export default function GenerateImagePage() {
           </div>
         )}
       </Card>
+
+      {selectedAsset && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={() => setSelectedAsset(null)}
+          />
+          <div
+            className="relative mx-4 w-full max-w-5xl rounded-2xl bg-white p-4 shadow-soft"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Image preview"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-xs uppercase tracking-[0.3em] text-black/40">Gallery</div>
+                <div className="text-lg font-semibold text-ink">
+                  {jobLabelMap.get(selectedAsset.job_id) ?? "Generated asset"}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    if (!selectedAsset.signed_url) return;
+                    const filename = `ba6_ai_${selectedAsset.job_id}_${selectedAsset.id}.webp`;
+                    downloadFromUrl(selectedAsset.signed_url, filename);
+                  }}
+                  aria-label="Download image"
+                >
+                  Download
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedAsset(null)}
+                  aria-label="Close preview"
+                >
+                  Close
+                </Button>
+              </div>
+            </div>
+
+            <div className="mt-4 flex items-center justify-center">
+              {selectedAsset.signed_url ? (
+                <>
+                  {lightboxLoading && (
+                    <div className="absolute text-xs text-black/50">Loading image…</div>
+                  )}
+                  <img
+                    src={selectedAsset.signed_url}
+                    alt={jobLabelMap.get(selectedAsset.job_id) ?? "Generated asset"}
+                    className="max-h-[70vh] w-auto max-w-full object-contain"
+                    onLoad={() => setLightboxLoading(false)}
+                    onError={() => setLightboxLoading(false)}
+                  />
+                </>
+              ) : (
+                <div className="text-sm text-black/50">Signed URL unavailable</div>
+              )}
+            </div>
+
+            <div className="mt-4 grid gap-2 text-xs text-black/60 sm:grid-cols-3">
+              <div>
+                <div className="text-[11px] uppercase text-black/40">Created</div>
+                <div>{formatDistanceToNow(new Date(selectedAsset.created_at), { addSuffix: true })}</div>
+              </div>
+              <div>
+                <div className="text-[11px] uppercase text-black/40">Dimensions</div>
+                <div>
+                  {selectedAsset.width && selectedAsset.height
+                    ? `${selectedAsset.width} × ${selectedAsset.height}`
+                    : "Unknown"}
+                </div>
+              </div>
+              <div>
+                <div className="text-[11px] uppercase text-black/40">Asset</div>
+                <div>{selectedAsset.id}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

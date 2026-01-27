@@ -232,7 +232,7 @@ export async function processAiImageJobs({
     processed += 1;
     const start = Date.now();
     try {
-      await logEvent(job, "claimed", { worker_id: workerId, attempt: job.attempt_count });
+      await logEvent(job, "claimed", { worker_id: workerId, attempt: job.attempt_count, model: job.model });
       const result = await fetchImage(job);
       const ext = extensionForMime(result.mime);
       const storagePath = `images/${job.user_id}/${job.id}-${randomUUID()}.${ext}`;
@@ -245,18 +245,20 @@ export async function processAiImageJobs({
       await logEvent(job, "succeeded", {
         worker_id: workerId,
         storage_path: storagePath,
-        duration_ms: Date.now() - start
+        duration_ms: Date.now() - start,
+        model: job.model
       });
-      log("info", "ai_job_succeeded", { job_id: job.id, storage_path: storagePath });
+      log("info", "ai_job_succeeded", { job_id: job.id, storage_path: storagePath, model: job.model });
     } catch (err: any) {
       const message = err?.message ?? String(err);
       await finalizeFailure(job, message);
       await logEvent(job, "failed", {
         worker_id: workerId,
         error_message: message,
-        duration_ms: Date.now() - start
+        duration_ms: Date.now() - start,
+        model: job.model
       });
-      log("error", "ai_job_failed", { job_id: job.id, error_message: message });
+      log("error", "ai_job_failed", { job_id: job.id, error_message: message, model: job.model });
     }
   }
   return processed;
