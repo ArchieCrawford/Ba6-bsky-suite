@@ -20,6 +20,7 @@ export function MobileNav() {
       <button
         type="button"
         aria-label="Open navigation"
+        aria-expanded={open}
         className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-black/10 bg-white/80 px-3 text-ink md:hidden"
         onClick={() => setOpen(true)}
       >
@@ -34,7 +35,7 @@ export function MobileNav() {
         <aside
           className={clsx(
             "absolute left-0 top-0 h-full w-72 max-w-[80vw] bg-white shadow-soft transition-transform",
-            "flex flex-col pb-[env(safe-area-inset-bottom)]",
+            "flex flex-col pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]",
             open ? "translate-x-0" : "-translate-x-full"
           )}
         >
