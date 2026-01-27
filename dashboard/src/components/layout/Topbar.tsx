@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { Button } from "@/components/ui/Button";
-import { MobileNav } from "@/components/layout/MobileNav";
 import { toast } from "sonner";
 
 export function Topbar() {
@@ -41,17 +40,14 @@ export function Topbar() {
   };
 
   return (
-    <header className="flex flex-wrap items-center justify-between gap-4 border-b border-black/10 bg-white/70 px-6 py-4 backdrop-blur">
-      <div className="flex items-center gap-4">
-        <MobileNav />
-        <div>
-          <div className="text-sm uppercase tracking-[0.2em] text-black/40">control panel</div>
-          <div className="text-xl font-semibold text-ink">Bluesky Ops</div>
-        </div>
+    <header className="flex flex-col gap-3 border-b border-black/10 bg-white/70 px-4 py-3 backdrop-blur sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4">
+      <div>
+        <div className="text-xs uppercase tracking-[0.2em] text-black/40 sm:text-sm">control panel</div>
+        <div className="text-lg font-semibold text-ink sm:text-xl">Bluesky Ops</div>
       </div>
-      <div className="flex items-center gap-3 text-sm text-black/70">
-        <span className="rounded-full bg-black/5 px-3 py-1">{email ?? "Signed in"}</span>
-        <Button variant="ghost" size="sm" onClick={onSignOut}>
+      <div className="flex flex-wrap items-center gap-2 text-xs text-black/70 sm:text-sm">
+        <span className="rounded-full bg-black/5 px-3 py-1 break-all">{email ?? "Signed in"}</span>
+        <Button variant="ghost" size="sm" onClick={onSignOut} className="w-full sm:w-auto">
           Sign out
         </Button>
       </div>

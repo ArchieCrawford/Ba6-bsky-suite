@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { format } from "date-fns";
 import { supabase } from "@/lib/supabaseClient";
 import { Card } from "@/components/ui/Card";
@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { Modal } from "@/components/ui/Modal";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/States";
+import { MobileCard } from "@/components/ui/MobileCard";
 import { toast } from "sonner";
 
 type DraftRow = {
@@ -31,6 +32,7 @@ export default function DraftsPage() {
   const [selectedDraft, setSelectedDraft] = useState<DraftRow | null>(null);
   const [selectedAccountId, setSelectedAccountId] = useState("");
   const [runAt, setRunAt] = useState("");
+  const newDraftRef = useRef<HTMLDivElement | null>(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -145,29 +147,50 @@ export default function DraftsPage() {
 
   return (
     <div className="space-y-6">
-      <Card>
-        <div className="text-sm font-semibold uppercase tracking-wide text-black/50">New draft</div>
-        <div className="mt-4 grid gap-4">
-          <Textarea
-            rows={6}
-            placeholder="Write the post copy..."
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-          />
-          <Button onClick={createDraft}>Save draft</Button>
+      <div className="sticky top-0 z-10 -mx-4 border-b border-black/10 bg-white/90 px-4 py-3 backdrop-blur sm:static sm:mx-0 sm:border-none sm:bg-transparent sm:px-0">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-xs uppercase tracking-[0.3em] text-black/40">Drafts</div>
+            <div className="text-sm text-black/60">Create copy and schedule posts.</div>
+          </div>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => newDraftRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+            className="w-auto"
+          >
+            New draft
+          </Button>
         </div>
-      </Card>
+      </div>
+
+      <div ref={newDraftRef}>
+        <Card>
+          <div className="text-sm font-semibold uppercase tracking-wide text-black/50">New draft</div>
+          <div className="mt-4 grid gap-4">
+            <Textarea
+              rows={6}
+              placeholder="Write the post copy..."
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+            />
+            <Button onClick={createDraft} className="w-full sm:w-auto">
+              Save draft
+            </Button>
+          </div>
+        </Card>
+      </div>
 
       <Card className="space-y-4">
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="text-sm font-semibold uppercase tracking-wide text-black/50">Drafts</div>
           <Input
             placeholder="Search drafts"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="max-w-xs"
+            className="w-full sm:max-w-xs"
           />
-          <Button variant="ghost" size="sm" onClick={loadData}>
+          <Button variant="ghost" size="sm" onClick={loadData} className="w-full sm:w-auto">
             Refresh
           </Button>
         </div>
@@ -175,24 +198,54 @@ export default function DraftsPage() {
         {filteredDrafts.length === 0 ? (
           <EmptyState title="No drafts" subtitle="Drafts you create will appear here." />
         ) : (
-          <div className="divide-y divide-black/5">
-            {filteredDrafts.map((draft) => (
-              <div key={draft.id} className="flex flex-wrap items-start justify-between gap-3 py-3">
-                <div>
-                  <div className="text-sm font-semibold text-ink">
-                    {draft.text.split("\n")[0]?.slice(0, 80) || "Untitled"}
+          <>
+            <div className="space-y-3 sm:hidden">
+              {filteredDrafts.map((draft) => (
+                <MobileCard
+                  key={draft.id}
+                  title={draft.text.split("\n")[0]?.slice(0, 80) || "Untitled"}
+                  subtitle={format(new Date(draft.created_at), "MMM d, yyyy HH:mm")}
+                  details={
+                    <div className="whitespace-pre-line text-black/70">{draft.text}</div>
+                  }
+                  actions={
+                    <details>
+                      <summary
+                        aria-label="More actions"
+                        className="inline-flex min-h-[44px] cursor-pointer items-center rounded-xl border border-black/10 bg-white/80 px-4 text-lg font-semibold text-black/60"
+                      >
+                        ⋯
+                      </summary>
+                      <div className="mt-2">
+                        <Button variant="secondary" size="sm" className="w-full" onClick={() => openSchedule(draft)}>
+                          Schedule
+                        </Button>
+                      </div>
+                    </details>
+                  }
+                />
+              ))}
+            </div>
+
+            <div className="hidden divide-y divide-black/5 sm:block">
+              {filteredDrafts.map((draft) => (
+                <div key={draft.id} className="flex flex-wrap items-start justify-between gap-3 py-3">
+                  <div>
+                    <div className="text-sm font-semibold text-ink">
+                      {draft.text.split("\n")[0]?.slice(0, 80) || "Untitled"}
+                    </div>
+                    <div className="mt-1 text-sm text-black/60">{draft.text}</div>
+                    <div className="mt-2 text-xs text-black/40">
+                      {format(new Date(draft.created_at), "MMM d, yyyy HH:mm")}
+                    </div>
                   </div>
-                  <div className="mt-1 text-sm text-black/60">{draft.text}</div>
-                  <div className="mt-2 text-xs text-black/40">
-                    {format(new Date(draft.created_at), "MMM d, yyyy HH:mm")}
-                  </div>
+                  <Button variant="secondary" size="sm" onClick={() => openSchedule(draft)}>
+                    Schedule
+                  </Button>
                 </div>
-                <Button variant="secondary" size="sm" onClick={() => openSchedule(draft)}>
-                  Schedule
-                </Button>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          </>
         )}
       </Card>
 
@@ -203,7 +256,7 @@ export default function DraftsPage() {
             <select
               value={selectedAccountId}
               onChange={(e) => setSelectedAccountId(e.target.value)}
-              className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm"
+              className="min-h-[44px] w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm"
             >
               {accounts.map((account) => (
                 <option key={account.id} value={account.id}>
@@ -217,10 +270,10 @@ export default function DraftsPage() {
             <Input type="datetime-local" value={runAt} onChange={(e) => setRunAt(e.target.value)} />
           </div>
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setModalOpen(false)}>
+            <Button variant="ghost" size="sm" onClick={() => setModalOpen(false)} className="w-full sm:w-auto">
               Cancel
             </Button>
-            <Button size="sm" onClick={scheduleDraft}>
+            <Button size="sm" onClick={scheduleDraft} className="w-full sm:w-auto">
               Schedule
             </Button>
           </div>

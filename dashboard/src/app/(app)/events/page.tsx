@@ -84,11 +84,23 @@ export default function EventsPage() {
 
   return (
     <div className="space-y-6">
-      <Card className="flex flex-wrap items-center gap-3">
+      <div className="sticky top-0 z-10 -mx-4 border-b border-black/10 bg-white/90 px-4 py-3 backdrop-blur sm:static sm:mx-0 sm:border-none sm:bg-transparent sm:px-0">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-xs uppercase tracking-[0.3em] text-black/40">Events</div>
+            <div className="text-sm text-black/60">Audit trail for worker activity.</div>
+          </div>
+          <Button variant="ghost" size="sm" onClick={loadEvents} className="w-auto sm:hidden">
+            Refresh
+          </Button>
+        </div>
+      </div>
+
+      <Card className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <select
           value={eventType}
           onChange={(e) => setEventType(e.target.value)}
-          className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm max-w-[180px]"
+          className="min-h-[44px] w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm sm:max-w-[200px]"
         >
           {eventTypes.map((type) => (
             <option key={type} value={type}>
@@ -99,7 +111,7 @@ export default function EventsPage() {
         <select
           value={sortDir}
           onChange={(e) => setSortDir(e.target.value as "asc" | "desc")}
-          className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm max-w-[160px]"
+          className="min-h-[44px] w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm sm:max-w-[180px]"
         >
           <option value="desc">Sort: newest</option>
           <option value="asc">Sort: oldest</option>
@@ -108,9 +120,9 @@ export default function EventsPage() {
           placeholder="Search by ID, type, or error"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="max-w-xs"
+          className="w-full sm:max-w-xs"
         />
-        <Button variant="ghost" size="sm" onClick={loadEvents}>
+        <Button variant="ghost" size="sm" onClick={loadEvents} className="w-full sm:w-auto">
           Refresh
         </Button>
       </Card>

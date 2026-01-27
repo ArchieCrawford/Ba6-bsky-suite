@@ -8,6 +8,7 @@ import { Drawer } from "@/components/ui/Drawer";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { MobileCard } from "@/components/ui/MobileCard";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/States";
 import { toast } from "sonner";
 
@@ -157,6 +158,18 @@ export default function ScheduledPage() {
 
   return (
     <div className="space-y-6">
+      <div className="sticky top-0 z-10 -mx-4 border-b border-black/10 bg-white/90 px-4 py-3 backdrop-blur sm:static sm:mx-0 sm:border-none sm:bg-transparent sm:px-0">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-xs uppercase tracking-[0.3em] text-black/40">Scheduled</div>
+            <div className="text-sm text-black/60">Monitor queued and posted work.</div>
+          </div>
+          <Button variant="ghost" size="sm" onClick={loadScheduled} className="w-auto sm:hidden">
+            Refresh
+          </Button>
+        </div>
+      </div>
+
       <Card>
         <details className="group">
           <summary className="flex cursor-pointer items-center justify-between text-sm font-semibold uppercase tracking-wide text-black/60">
@@ -188,17 +201,17 @@ export default function ScheduledPage() {
           </div>
         </details>
       </Card>
-      <Card className="flex flex-wrap items-center gap-3">
+      <Card className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <Input
           placeholder="Search drafts or IDs"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="max-w-xs"
+          className="w-full sm:max-w-xs"
         />
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm max-w-[160px]"
+          className="min-h-[44px] w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm sm:max-w-[180px]"
         >
           {statusOptions.map((status) => (
             <option key={status} value={status}>
@@ -209,12 +222,12 @@ export default function ScheduledPage() {
         <select
           value={sortKey}
           onChange={(e) => setSortKey(e.target.value as "run_at" | "status")}
-          className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm max-w-[160px]"
+          className="min-h-[44px] w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm sm:max-w-[180px]"
         >
           <option value="run_at">Sort: Run time</option>
           <option value="status">Sort: Status</option>
         </select>
-        <Button variant="ghost" size="sm" onClick={loadScheduled}>
+        <Button variant="ghost" size="sm" onClick={loadScheduled} className="w-full sm:w-auto">
           Refresh
         </Button>
       </Card>
@@ -222,36 +235,70 @@ export default function ScheduledPage() {
       {filteredRows.length === 0 ? (
         <EmptyState title="No scheduled posts" subtitle="Create a draft and schedule it to see entries here." />
       ) : (
-        <Card className="overflow-hidden">
-          <div className="grid grid-cols-12 gap-2 border-b border-black/10 bg-sand/60 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-black/50">
-            <div className="col-span-2">Status</div>
-            <div className="col-span-3">Run at</div>
-            <div className="col-span-5">Draft</div>
-            <div className="col-span-2">Attempts</div>
+        <>
+          <div className="space-y-3 sm:hidden">
+            {filteredRows.map((row) => {
+              const draftText = Array.isArray(row.drafts)
+                ? row.drafts[0]?.text ?? "(missing draft)"
+                : row.drafts?.text ?? "(missing draft)";
+              return (
+                <MobileCard
+                  key={row.id}
+                  title={draftText.split("\n")[0]?.slice(0, 80) || "Scheduled post"}
+                  subtitle={format(new Date(row.run_at), "MMM d, yyyy HH:mm")}
+                  status={<StatusBadge status={row.status} />}
+                  details={
+                    <>
+                      <div className="whitespace-pre-line text-black/70">{draftText}</div>
+                      <div className="break-all">Account: {row.account_did}</div>
+                      <div>
+                        Attempts: {row.attempt_count}/{row.max_attempts}
+                      </div>
+                      <div className="break-all">Posted URI: {row.posted_uri ?? "-"}</div>
+                      <div className="break-all">Last error: {row.last_error ?? "None"}</div>
+                    </>
+                  }
+                  actions={
+                    <Button variant="secondary" size="sm" className="w-full" onClick={() => setSelected(row)}>
+                      View timeline
+                    </Button>
+                  }
+                />
+              );
+            })}
           </div>
-          <div className="divide-y divide-black/5">
-            {filteredRows.map((row) => (
-              <button
-                key={row.id}
-                onClick={() => setSelected(row)}
-                className="grid w-full grid-cols-12 gap-2 px-4 py-3 text-left text-sm hover:bg-black/5"
-              >
-                <div className="col-span-2">
-                  <StatusBadge status={row.status} />
-                </div>
-                <div className="col-span-3 text-xs text-black/60">
-                  {format(new Date(row.run_at), "MMM d, yyyy HH:mm")}
-                </div>
-                <div className="col-span-5 text-sm text-black/80">
-                  {Array.isArray(row.drafts) ? row.drafts[0]?.text ?? "(missing draft)" : row.drafts?.text ?? "(missing draft)"}
-                </div>
-                <div className="col-span-2 text-xs text-black/60">
-                  {row.attempt_count}/{row.max_attempts}
-                </div>
-              </button>
-            ))}
-          </div>
-        </Card>
+
+          <Card className="hidden sm:block overflow-hidden">
+            <div className="grid grid-cols-12 gap-2 border-b border-black/10 bg-sand/60 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-black/50">
+              <div className="col-span-2">Status</div>
+              <div className="col-span-3">Run at</div>
+              <div className="col-span-5">Draft</div>
+              <div className="col-span-2">Attempts</div>
+            </div>
+            <div className="divide-y divide-black/5">
+              {filteredRows.map((row) => (
+                <button
+                  key={row.id}
+                  onClick={() => setSelected(row)}
+                  className="grid w-full grid-cols-12 gap-2 px-4 py-3 text-left text-sm hover:bg-black/5"
+                >
+                  <div className="col-span-2">
+                    <StatusBadge status={row.status} />
+                  </div>
+                  <div className="col-span-3 text-xs text-black/60">
+                    {format(new Date(row.run_at), "MMM d, yyyy HH:mm")}
+                  </div>
+                  <div className="col-span-5 text-sm text-black/80">
+                    {Array.isArray(row.drafts) ? row.drafts[0]?.text ?? "(missing draft)" : row.drafts?.text ?? "(missing draft)"}
+                  </div>
+                  <div className="col-span-2 text-xs text-black/60">
+                    {row.attempt_count}/{row.max_attempts}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </Card>
+        </>
       )}
 
       <Drawer
@@ -300,7 +347,7 @@ export default function ScheduledPage() {
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-2">
+            <div className="hidden flex-wrap gap-2 sm:flex">
               <Button variant="secondary" size="sm" onClick={() => retryJob(selected)}>
                 Retry job
               </Button>
@@ -308,6 +355,23 @@ export default function ScheduledPage() {
                 Cancel job
               </Button>
             </div>
+
+            <details className="sm:hidden">
+              <summary
+                aria-label="More actions"
+                className="inline-flex min-h-[44px] cursor-pointer items-center rounded-xl border border-black/10 bg-white/80 px-4 text-lg font-semibold text-black/60"
+              >
+                ⋯
+              </summary>
+              <div className="mt-3 grid gap-2">
+                <Button variant="secondary" size="sm" onClick={() => retryJob(selected)} className="w-full">
+                  Retry job
+                </Button>
+                <Button variant="danger" size="sm" onClick={() => cancelJob(selected)} className="w-full">
+                  Cancel job
+                </Button>
+              </div>
+            </details>
 
             <div>
               <div className="text-xs uppercase tracking-wide text-black/40">Event timeline</div>

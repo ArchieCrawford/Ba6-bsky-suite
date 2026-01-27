@@ -35,7 +35,7 @@ export function Button({
   return (
     <button
       className={clsx(
-        "inline-flex items-center justify-center gap-2 rounded-xl font-medium transition",
+        "inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl font-medium transition",
         "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink/40",
         variants[variant],
         sizes[size],

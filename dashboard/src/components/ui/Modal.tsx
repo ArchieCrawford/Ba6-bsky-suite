@@ -21,8 +21,8 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
       />
       <div
         className={clsx(
-          "absolute left-1/2 top-1/2 w-full max-w-xl -translate-x-1/2 -translate-y-1/2",
-          "rounded-xl border border-black/10 bg-white p-6 shadow-soft transition",
+          "absolute left-1/2 top-1/2 w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 -translate-y-1/2",
+          "max-h-[85vh] overflow-y-auto rounded-xl border border-black/10 bg-white p-6 shadow-soft transition",
           open ? "opacity-100" : "opacity-0"
         )}
       >

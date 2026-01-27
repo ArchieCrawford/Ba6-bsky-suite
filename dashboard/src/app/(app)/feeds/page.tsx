@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { MobileCard } from "@/components/ui/MobileCard";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/States";
 import { toast } from "sonner";
 
@@ -345,6 +346,18 @@ export default function FeedsPage() {
 
   return (
     <div className="space-y-6">
+      <div className="sticky top-0 z-10 -mx-4 border-b border-black/10 bg-white/90 px-4 py-3 backdrop-blur sm:static sm:mx-0 sm:border-none sm:bg-transparent sm:px-0">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-xs uppercase tracking-[0.3em] text-black/40">Feeds</div>
+            <div className="text-sm text-black/60">Manage custom feed generators.</div>
+          </div>
+          <Button variant="ghost" size="sm" onClick={loadFeeds} className="w-auto sm:hidden">
+            Refresh
+          </Button>
+        </div>
+      </div>
+
       <Card>
         <details className="group">
           <summary className="flex cursor-pointer items-center justify-between text-sm font-semibold uppercase tracking-wide text-black/60">
@@ -368,27 +381,27 @@ export default function FeedsPage() {
         </details>
       </Card>
       <Card>
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="text-sm font-semibold uppercase tracking-wide text-black/50">Feeds</div>
             <div className="text-xs text-black/50">Manage feed slugs and enablement.</div>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <Input
               placeholder="Search feeds"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="max-w-xs"
+              className="w-full sm:max-w-xs"
             />
             <select
               value={sortKey}
               onChange={(e) => setSortKey(e.target.value as "slug" | "status")}
-              className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm max-w-[160px]"
+              className="min-h-[44px] w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm sm:max-w-[160px]"
             >
               <option value="slug">Sort: slug</option>
               <option value="status">Sort: status</option>
             </select>
-            <Button variant="ghost" size="sm" onClick={loadFeeds}>
+            <Button variant="ghost" size="sm" onClick={loadFeeds} className="w-full sm:w-auto">
               Refresh
             </Button>
           </div>
@@ -397,24 +410,65 @@ export default function FeedsPage() {
         {filteredFeeds.length === 0 ? (
           <EmptyState title="No feeds" subtitle="Create a feed in Supabase to manage it here." />
         ) : (
-          <div className="mt-4 divide-y divide-black/5">
-            {filteredFeeds.map((feed) => (
-              <div key={feed.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
-                <div>
-                  <div className="text-sm font-semibold text-ink">{feed.title ?? "Untitled feed"}</div>
-                  <div className="text-xs text-black/50">/{feed.slug}</div>
+          <>
+            <div className="mt-4 space-y-3 sm:hidden">
+              {filteredFeeds.map((feed) => (
+                <MobileCard
+                  key={feed.id}
+                  title={feed.title ?? "Untitled feed"}
+                  subtitle={`/${feed.slug}`}
+                  status={
+                    <span className={`text-xs font-semibold ${feed.is_enabled ? "text-emerald-600" : "text-rose-600"}`}>
+                      {feed.is_enabled ? "Enabled" : "Disabled"}
+                    </span>
+                  }
+                  details={feed.description ? <div>{feed.description}</div> : <div>No description.</div>}
+                  actions={
+                    <details>
+                      <summary
+                        aria-label="More actions"
+                        className="inline-flex min-h-[44px] cursor-pointer items-center rounded-xl border border-black/10 bg-white/80 px-4 text-lg font-semibold text-black/60"
+                      >
+                        ⋯
+                      </summary>
+                      <div className="mt-2 grid gap-2">
+                        <Button variant="secondary" size="sm" className="w-full" onClick={() => setSelectedFeedId(feed.id)}>
+                          Edit rules
+                        </Button>
+                        <Button
+                          variant={feed.is_enabled ? "ghost" : "primary"}
+                          size="sm"
+                          className="w-full"
+                          onClick={() => toggleFeed(feed)}
+                        >
+                          {feed.is_enabled ? "Disable" : "Enable"}
+                        </Button>
+                      </div>
+                    </details>
+                  }
+                />
+              ))}
+            </div>
+
+            <div className="mt-4 hidden divide-y divide-black/5 sm:block">
+              {filteredFeeds.map((feed) => (
+                <div key={feed.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                  <div>
+                    <div className="text-sm font-semibold text-ink">{feed.title ?? "Untitled feed"}</div>
+                    <div className="text-xs text-black/50">/{feed.slug}</div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="secondary" size="sm" onClick={() => setSelectedFeedId(feed.id)}>
+                      Edit rules
+                    </Button>
+                    <Button variant={feed.is_enabled ? "ghost" : "primary"} size="sm" onClick={() => toggleFeed(feed)}>
+                      {feed.is_enabled ? "Disable" : "Enable"}
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <Button variant="secondary" size="sm" onClick={() => setSelectedFeedId(feed.id)}>
-                    Edit rules
-                  </Button>
-                  <Button variant={feed.is_enabled ? "ghost" : "primary"} size="sm" onClick={() => toggleFeed(feed)}>
-                    {feed.is_enabled ? "Disable" : "Enable"}
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          </>
         )}
       </Card>
 
@@ -436,7 +490,7 @@ export default function FeedsPage() {
               <Input value={lang} onChange={(e) => setLang(e.target.value)} placeholder="Optional (en)" />
             </div>
             <div className="flex gap-2">
-              <Button size="sm" onClick={saveRules} disabled={!selectedFeedId}>
+              <Button size="sm" onClick={saveRules} disabled={!selectedFeedId} className="w-full sm:w-auto">
                 Save rules
               </Button>
             </div>
@@ -462,11 +516,11 @@ export default function FeedsPage() {
             {accounts.length === 0 ? (
               <div className="mt-2 text-xs text-black/50">Connect a Bluesky account to publish this feed.</div>
             ) : (
-              <div className="mt-2 flex flex-wrap items-center gap-2">
+              <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
                 <select
                   value={selectedAccountDid}
                   onChange={(e) => setSelectedAccountDid(e.target.value)}
-                  className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm max-w-[220px]"
+                  className="min-h-[44px] w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm sm:max-w-[220px]"
                 >
                   {accounts.map((account) => (
                     <option key={account.account_did} value={account.account_did}>
@@ -478,6 +532,7 @@ export default function FeedsPage() {
                   size="sm"
                   onClick={publishFeed}
                   disabled={!selectedFeedId || !selectedAccountDid || publishing}
+                  className="w-full sm:w-auto"
                 >
                   {publishing ? "Publishing..." : "Publish feed"}
                 </Button>
@@ -493,7 +548,7 @@ export default function FeedsPage() {
             <select
               value={testSlug}
               onChange={(e) => setTestSlug(e.target.value)}
-              className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm"
+              className="min-h-[44px] w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm"
             >
               {feeds.map((feed) => (
                 <option key={feed.slug} value={feed.slug}>
@@ -501,7 +556,7 @@ export default function FeedsPage() {
                 </option>
               ))}
             </select>
-            <Button size="sm" onClick={runTest} disabled={testing}>
+            <Button size="sm" onClick={runTest} disabled={testing} className="w-full sm:w-auto">
               {testing ? "Running..." : "Run test"}
             </Button>
           </div>

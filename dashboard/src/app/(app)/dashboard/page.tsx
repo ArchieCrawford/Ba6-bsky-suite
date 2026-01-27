@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { supabase } from "@/lib/supabaseClient";
 import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
 import { ErrorState, LoadingState } from "@/components/ui/States";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { toast } from "sonner";
@@ -89,7 +90,19 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <section className="grid gap-4 lg:grid-cols-5">
+      <div className="sticky top-0 z-10 -mx-4 border-b border-black/10 bg-white/90 px-4 py-3 backdrop-blur sm:static sm:mx-0 sm:border-none sm:bg-transparent sm:px-0">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-xs uppercase tracking-[0.3em] text-black/40">Overview</div>
+            <div className="text-sm text-black/60">Live status across workers and queues.</div>
+          </div>
+          <Button variant="ghost" size="sm" onClick={loadData} className="w-auto">
+            Refresh
+          </Button>
+        </div>
+      </div>
+
+      <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {statusCards.map((item) => (
           <Card key={item.status} className="flex flex-col gap-3">
             <StatusBadge status={item.status} />

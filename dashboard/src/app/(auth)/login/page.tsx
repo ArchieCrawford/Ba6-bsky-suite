@@ -59,7 +59,7 @@ export default function LoginPage() {
         <div className="p-6 sm:p-8">
           <div className="text-xs uppercase tracking-[0.3em] text-black/40">BA6</div>
           <h1 className="mt-2 text-2xl font-semibold">Sign in to the control panel</h1>
-          <p className="mt-2 text-sm text-black/60">Use your Supabase email login.</p>
+          <p className="mt-2 text-sm text-black/60">Use your email login.</p>
 
           <form className="mt-6 space-y-4" onSubmit={onSubmit}>
             <div>

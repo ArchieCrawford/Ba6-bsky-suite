@@ -9,7 +9,7 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="hidden h-screen w-64 flex-col border-r border-black/10 bg-white/70 p-6 backdrop-blur lg:flex">
+    <aside className="hidden h-screen w-64 flex-col border-r border-black/10 bg-white/70 p-6 backdrop-blur md:flex">
       <div className="text-lg font-semibold tracking-tight text-ink">BA6 Control</div>
       <div className="mt-1 text-xs uppercase tracking-[0.2em] text-black/40">Bluesky Suite</div>
 
