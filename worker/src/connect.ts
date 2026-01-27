@@ -78,6 +78,16 @@ async function main() {
   const { error: userError } = await supa.from("users").upsert({ id: userId }, { onConflict: "id" });
   if (userError) throw userError;
 
+  const { data: secretId, error: secretError } = await supa.rpc("create_account_secret", {
+    secret: appPassword,
+    name: `bsky:${handle}`,
+    description: `Bluesky app password for ${handle}`
+  });
+  if (secretError) throw secretError;
+  if (!secretId) {
+    throw new Error("Unable to store app password");
+  }
+
   const { error: accountError } = await supa
     .from("accounts")
     .upsert(
@@ -85,11 +95,11 @@ async function main() {
         user_id: userId,
         account_did: did,
         handle: loginRes.data.handle ?? handle,
-        app_password: appPassword,
+        vault_secret_id: secretId,
         last_auth_at: now,
         is_active: true
       },
-      { onConflict: "account_did" }
+      { onConflict: "user_id,account_did" }
     );
 
   if (accountError) throw accountError;

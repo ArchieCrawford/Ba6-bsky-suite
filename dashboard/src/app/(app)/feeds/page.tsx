@@ -29,6 +29,7 @@ const matchesKeyword = (text: string, keyword: string) => {
 type FeedRow = {
   id: string;
   slug: string;
+  title: string | null;
   display_name: string | null;
   description: string | null;
   is_enabled: boolean;
@@ -71,7 +72,7 @@ export default function FeedsPage() {
       filtered = feeds.filter((feed) => {
         return (
           feed.slug.toLowerCase().includes(term) ||
-          (feed.display_name ?? "").toLowerCase().includes(term) ||
+          (feed.title ?? feed.display_name ?? "").toLowerCase().includes(term) ||
           feed.description?.toLowerCase().includes(term)
         );
       });
@@ -90,7 +91,7 @@ export default function FeedsPage() {
     try {
       const { data, error: feedError } = await supabase
         .from("feeds")
-        .select("id,slug,display_name,description,is_enabled")
+        .select("id,slug,title,display_name,description,is_enabled")
         .order("created_at", { ascending: false });
       if (feedError) throw feedError;
       const feedRows = (data ?? []) as FeedRow[];
@@ -412,10 +413,12 @@ export default function FeedsPage() {
         ) : (
           <>
             <div className="mt-4 space-y-3 sm:hidden">
-              {filteredFeeds.map((feed) => (
+              {filteredFeeds.map((feed) => {
+                const label = feed.title ?? feed.display_name ?? "Untitled feed";
+                return (
                 <MobileCard
                   key={feed.id}
-                  title={feed.display_name ?? "Untitled feed"}
+                  title={label}
                   subtitle={`/${feed.slug}`}
                   status={
                     <span className={`text-xs font-semibold ${feed.is_enabled ? "text-emerald-600" : "text-rose-600"}`}>
@@ -447,26 +450,30 @@ export default function FeedsPage() {
                     </details>
                   }
                 />
-              ))}
+              );
+            })}
             </div>
 
             <div className="mt-4 hidden divide-y divide-black/5 sm:block">
-              {filteredFeeds.map((feed) => (
-                <div key={feed.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
-                  <div>
-                  <div className="text-sm font-semibold text-ink">{feed.display_name ?? "Untitled feed"}</div>
-                    <div className="text-xs text-black/50">/{feed.slug}</div>
+              {filteredFeeds.map((feed) => {
+                const label = feed.title ?? feed.display_name ?? "Untitled feed";
+                return (
+                  <div key={feed.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                    <div>
+                      <div className="text-sm font-semibold text-ink">{label}</div>
+                      <div className="text-xs text-black/50">/{feed.slug}</div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="secondary" size="sm" onClick={() => setSelectedFeedId(feed.id)}>
+                        Edit rules
+                      </Button>
+                      <Button variant={feed.is_enabled ? "ghost" : "primary"} size="sm" onClick={() => toggleFeed(feed)}>
+                        {feed.is_enabled ? "Disable" : "Enable"}
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex gap-2">
-                    <Button variant="secondary" size="sm" onClick={() => setSelectedFeedId(feed.id)}>
-                      Edit rules
-                    </Button>
-                    <Button variant={feed.is_enabled ? "ghost" : "primary"} size="sm" onClick={() => toggleFeed(feed)}>
-                      {feed.is_enabled ? "Disable" : "Enable"}
-                    </Button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </>
         )}

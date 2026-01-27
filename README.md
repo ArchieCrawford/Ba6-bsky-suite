@@ -7,6 +7,8 @@ This repo provides a minimal Supabase schema, a scheduler worker that posts to B
 - `supabase/migrations/0001_init.sql`
 - `supabase/migrations/0002_claim_rpc.sql`
 - `supabase/migrations/0003_worker_heartbeat.sql`
+- `supabase/migrations/0004_multi_user_optional_accounts.sql`
+- `supabase/migrations/0005_vault_secrets.sql`
 - `worker/` (scheduler poster)
 - `feedgen/` (feed skeleton service)
 - `dashboard/` (Next.js control panel)
@@ -29,11 +31,11 @@ cp dashboard/.env.example dashboard/.env.local
 ## Multi-user + RLS
 
 - `dashboard/` uses the anon key + user session. All reads are scoped by RLS policies; inserts include `user_id = auth.uid()`.
-- The dashboard publish API route uses `SUPABASE_SERVICE_ROLE_KEY` + `FEEDGEN_SERVICE_DID` (server-side only).
+- The dashboard publish API route runs server-side with the anon key and the caller's JWT. It also needs `FEEDGEN_SERVICE_DID`.
 - `public.users` is the profile table keyed by `auth.uid()`. The dashboard bootstraps a profile row on first authenticated load.
 - `worker/` and `feedgen/` use `SUPABASE_SERVICE_ROLE_KEY` and bypass RLS for background tasks.
 - Ownership is enforced through `user_id` foreign keys on `accounts`, `drafts`, `scheduled_posts`, and `feeds`.
-- `accounts` stores Bluesky app passwords (server-side only). Never expose the service role key or app passwords to clients.
+- `accounts` stores Bluesky app passwords in Supabase Vault (RLS enforced). Never expose the service role key or secrets to clients.
 
 ## Supabase migration
 

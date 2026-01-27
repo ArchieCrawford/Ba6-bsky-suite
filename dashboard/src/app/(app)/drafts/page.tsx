@@ -58,7 +58,7 @@ export default function DraftsPage() {
       if (accountError) throw accountError;
       setAccounts((accountRows ?? []) as AccountRow[]);
       if (accountRows?.length) {
-        setSelectedAccountId(accountRows[0].id);
+        setSelectedAccountId((current) => current || accountRows[0].id);
       }
     } catch (err: any) {
       const message = err?.message ?? "Failed to load drafts";
@@ -98,10 +98,6 @@ export default function DraftsPage() {
   const scheduleDraft = async () => {
     if (!userId || !selectedDraft) return;
     const selectedAccount = accounts.find((account) => account.id === selectedAccountId);
-    if (!selectedAccount) {
-      toast.error("Choose a Bluesky account");
-      return;
-    }
     if (!runAt) {
       toast.error("Pick a run time");
       return;
@@ -110,8 +106,8 @@ export default function DraftsPage() {
     try {
       const { error: scheduleError } = await supabase.from("scheduled_posts").insert({
         user_id: userId,
-        account_id: selectedAccount.id,
-        account_did: selectedAccount.account_did,
+        account_id: selectedAccount?.id ?? null,
+        account_did: selectedAccount?.account_did ?? null,
         draft_id: selectedDraft.id,
         run_at: new Date(runAt).toISOString(),
         max_attempts: 5,
@@ -195,6 +191,12 @@ export default function DraftsPage() {
           </Button>
         </div>
 
+        {accounts.length === 0 && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+            Connect a Bluesky account to post. You can still schedule drafts without one.
+          </div>
+        )}
+
         {filteredDrafts.length === 0 ? (
           <EmptyState title="No drafts" subtitle="Drafts you create will appear here." />
         ) : (
@@ -251,6 +253,11 @@ export default function DraftsPage() {
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Schedule draft">
         <div className="space-y-4 text-sm">
+          {(!selectedAccountId || accounts.length === 0) && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              Connect a Bluesky account to post.
+            </div>
+          )}
           <div>
             <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Account</label>
             <select
@@ -258,6 +265,7 @@ export default function DraftsPage() {
               onChange={(e) => setSelectedAccountId(e.target.value)}
               className="min-h-[44px] w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm"
             >
+              <option value="">No account (draft only)</option>
               {accounts.map((account) => (
                 <option key={account.id} value={account.id}>
                   {account.handle ?? account.account_did}

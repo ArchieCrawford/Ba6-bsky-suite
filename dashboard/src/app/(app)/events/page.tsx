@@ -22,6 +22,7 @@ const eventTypes = [
   "post_attempt",
   "post_success",
   "post_failed",
+  "missing_account",
   "worker_error",
   "posting",
   "posted",

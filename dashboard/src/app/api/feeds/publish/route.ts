@@ -26,6 +26,7 @@ type FeedRow = {
   id: string;
   user_id: string;
   slug: string;
+  title: string | null;
   display_name: string | null;
   description: string | null;
 };
@@ -36,6 +37,7 @@ type AccountRow = {
   account_did: string;
   handle: string | null;
   app_password: string | null;
+  vault_secret_id: string | null;
   is_active: boolean | null;
 };
 
@@ -68,7 +70,10 @@ async function fetchFeed(supa: SupabaseClientAny, input: PublishRequest, userId:
   if (!input.feedId && !input.slug) {
     throw new Error("Missing feed id or slug");
   }
-  let query = supa.from("feeds").select("id,user_id,slug,display_name,description").eq("user_id", userId);
+  let query = supa
+    .from("feeds")
+    .select("id,user_id,slug,title,display_name,description")
+    .eq("user_id", userId);
   if (input.feedId) {
     query = query.eq("id", input.feedId);
   } else if (input.slug) {
@@ -90,7 +95,7 @@ async function fetchAccount(
 ): Promise<AccountRow> {
   let query = supa
     .from("accounts")
-    .select("id,user_id,account_did,handle,app_password,is_active")
+    .select("id,user_id,account_did,handle,app_password,vault_secret_id,is_active")
     .eq("user_id", userId);
   if (accountDid) query = query.eq("account_did", accountDid);
   if (handle) query = query.eq("handle", handle);
@@ -105,17 +110,26 @@ async function fetchAccount(
   return data[0] as AccountRow;
 }
 
+async function resolveAccountSecret(supa: SupabaseClientAny, account: AccountRow): Promise<string | null> {
+  if (account.app_password) return account.app_password;
+  if (!account.vault_secret_id) return null;
+  const { data, error } = await supa.rpc("get_account_secret", { account_id: account.id });
+  if (error) throw error;
+  return data ?? null;
+}
+
 async function loginAgent(supa: SupabaseClientAny, account: AccountRow) {
   if (account.is_active === false) {
     throw new Error("Account is disabled");
   }
-  if (!account.app_password) {
+  const secret = await resolveAccountSecret(supa, account);
+  if (!secret) {
     throw new Error("Missing app password for Bluesky account");
   }
   const service = process.env.BLUESKY_SERVICE ?? "https://bsky.social";
   const agent = new BskyAgent({ service });
   const identifier = account.handle ?? account.account_did;
-  const loginRes = await agent.login({ identifier, password: account.app_password });
+  const loginRes = await agent.login({ identifier, password: secret });
 
   if (loginRes.data.did && loginRes.data.did !== account.account_did) {
     throw new Error("Account DID mismatch");
@@ -132,12 +146,13 @@ async function loginAgent(supa: SupabaseClientAny, account: AccountRow) {
 
 export async function POST(request: Request) {
   try {
-    const supa = createSupabaseServerClient();
-    const feedgenDid = requireEnv("FEEDGEN_SERVICE_DID");
     const token = getBearerToken(request);
     if (!token) {
       return NextResponse.json({ error: "Missing auth token" }, { status: 401 });
     }
+
+    const supa = createSupabaseServerClient(token);
+    const feedgenDid = requireEnv("FEEDGEN_SERVICE_DID");
 
     const { data, error: authError } = await supa.auth.getUser(token);
     if (authError || !data.user) {
@@ -167,7 +182,7 @@ export async function POST(request: Request) {
       typeof existingRecord?.createdAt === "string" ? existingRecord.createdAt : new Date().toISOString();
     const record = {
       did: feedgenDid,
-      displayName: feed.display_name ?? feed.slug,
+      displayName: feed.title ?? feed.display_name ?? feed.slug,
       ...(feed.description ? { description: feed.description } : {}),
       createdAt
     };

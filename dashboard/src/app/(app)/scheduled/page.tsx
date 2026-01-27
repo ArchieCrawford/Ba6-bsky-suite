@@ -31,7 +31,7 @@ type ScheduledRow = {
   posted_cid: string | null;
   locked_at: string | null;
   locked_by: string | null;
-  account_did: string;
+  account_did: string | null;
   drafts?: { text: string | null }[] | { text: string | null } | null;
 };
 
@@ -250,7 +250,7 @@ export default function ScheduledPage() {
                   details={
                     <>
                       <div className="whitespace-pre-line text-black/70">{draftText}</div>
-                      <div className="break-all">Account: {row.account_did}</div>
+                      <div className="break-all">Account: {row.account_did ?? "No account connected"}</div>
                       <div>
                         Attempts: {row.attempt_count}/{row.max_attempts}
                       </div>
@@ -326,7 +326,9 @@ export default function ScheduledPage() {
               </div>
               <div>
                 <div className="text-xs uppercase tracking-wide text-black/40">Account DID</div>
-                <div className="mt-1 text-xs text-black/70 break-all">{selected.account_did}</div>
+                <div className="mt-1 text-xs text-black/70 break-all">
+                  {selected.account_did ?? "No account connected"}
+                </div>
               </div>
             </div>
 

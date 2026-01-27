@@ -14,6 +14,7 @@ type FeedRow = {
   id: string;
   user_id: string;
   slug: string;
+  title: string | null;
   display_name: string | null;
   description: string | null;
 };
@@ -24,6 +25,7 @@ type AccountRow = {
   account_did: string;
   handle: string | null;
   app_password: string | null;
+  vault_secret_id: string | null;
   is_active: boolean | null;
 };
 
@@ -80,7 +82,10 @@ function printUsage() {
 }
 
 async function fetchFeed(slug: string, userId?: string): Promise<FeedRow> {
-  let query = supa.from("feeds").select("id,user_id,slug,display_name,description").eq("slug", slug);
+  let query = supa
+    .from("feeds")
+    .select("id,user_id,slug,title,display_name,description")
+    .eq("slug", slug);
   if (userId) query = query.eq("user_id", userId);
   const { data, error } = await query;
   if (error) throw error;
@@ -96,7 +101,7 @@ async function fetchFeed(slug: string, userId?: string): Promise<FeedRow> {
 async function fetchAccount(userId: string, accountDid?: string, handle?: string): Promise<AccountRow> {
   let query = supa
     .from("accounts")
-    .select("id,user_id,account_did,handle,app_password,is_active")
+    .select("id,user_id,account_did,handle,app_password,vault_secret_id,is_active")
     .eq("user_id", userId);
   if (accountDid) query = query.eq("account_did", accountDid);
   if (handle) query = query.eq("handle", handle);
@@ -109,6 +114,25 @@ async function fetchAccount(userId: string, accountDid?: string, handle?: string
     throw new Error("Multiple Bluesky accounts found; provide --account-did or --handle");
   }
   return data[0] as AccountRow;
+}
+
+async function fetchAccountSecret(account: AccountRow): Promise<string> {
+  if (account.app_password) return account.app_password;
+  if (!account.vault_secret_id) {
+    throw new Error("Missing app password for account");
+  }
+  const { data, error } = await supa
+    .schema("vault")
+    .from("decrypted_secrets")
+    .select("decrypted_secret")
+    .eq("id", account.vault_secret_id)
+    .single();
+  if (error) throw error;
+  const secret = (data as any)?.decrypted_secret;
+  if (!secret) {
+    throw new Error("Vault secret not found");
+  }
+  return String(secret);
 }
 
 function isRecordNotFound(err: any) {
@@ -134,13 +158,11 @@ async function loginAgent(account: AccountRow) {
   if (account.is_active === false) {
     throw new Error("Account is disabled");
   }
-  if (!account.app_password) {
-    throw new Error("Missing app password for Bluesky account");
-  }
+  const secret = await fetchAccountSecret(account);
   const service = process.env.BLUESKY_SERVICE ?? "https://bsky.social";
   const agent = agentFor(service);
   const identifier = account.handle ?? account.account_did;
-  const loginRes = await agent.login({ identifier, password: account.app_password });
+  const loginRes = await agent.login({ identifier, password: secret });
 
   if (loginRes.data.did && loginRes.data.did !== account.account_did) {
     throw new Error("Account DID mismatch");
@@ -192,7 +214,7 @@ async function main() {
 
   const record = {
     did: feedgenDid,
-    displayName: feed.display_name ?? feed.slug,
+    displayName: feed.title ?? feed.display_name ?? feed.slug,
     ...(feed.description ? { description: feed.description } : {}),
     createdAt
   };

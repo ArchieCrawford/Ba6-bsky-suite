@@ -11,8 +11,8 @@ const WORKER_ID = process.env.WORKER_ID ?? `worker-${randomUUID()}`;
 type ScheduledRow = {
   id: string;
   user_id: string;
-  account_id: string;
-  account_did: string;
+  account_id: string | null;
+  account_did: string | null;
   draft_id: string;
   run_at: string;
   status: "queued" | "posting" | "posted" | "failed" | "canceled";
@@ -28,6 +28,7 @@ type AccountRow = {
   account_did: string;
   handle: string | null;
   app_password: string | null;
+  vault_secret_id: string | null;
   is_active: boolean | null;
 };
 
@@ -79,7 +80,7 @@ async function fetchDraft(userId: string, draftId: string): Promise<DraftRow> {
 async function fetchAccount(accountId: string, expectedDid: string): Promise<AccountRow> {
   const { data, error } = await supa
     .from("accounts")
-    .select("id,user_id,account_did,handle,app_password,is_active")
+    .select("id,user_id,account_did,handle,app_password,vault_secret_id,is_active")
     .eq("id", accountId)
     .single();
   if (error) throw error;
@@ -88,6 +89,25 @@ async function fetchAccount(accountId: string, expectedDid: string): Promise<Acc
     throw new Error("Account DID mismatch");
   }
   return account;
+}
+
+async function fetchAccountSecret(account: AccountRow): Promise<string> {
+  if (account.app_password) return account.app_password;
+  if (!account.vault_secret_id) {
+    throw new Error("Missing app password for account");
+  }
+  const { data, error } = await supa
+    .schema("vault")
+    .from("decrypted_secrets")
+    .select("decrypted_secret")
+    .eq("id", account.vault_secret_id)
+    .single();
+  if (error) throw error;
+  const secret = (data as any)?.decrypted_secret;
+  if (!secret) {
+    throw new Error("Vault secret not found");
+  }
+  return String(secret);
 }
 
 async function logEvent(
@@ -127,6 +147,20 @@ async function markPosted(scheduledPostId: string, uri: string, cid: string) {
     .eq("id", scheduledPostId);
 }
 
+async function markMissingAccount(scheduledPostId: string) {
+  const now = new Date().toISOString();
+  await supa
+    .from("scheduled_posts")
+    .update({
+      status: "queued",
+      last_error: "No connected Bluesky account",
+      locked_at: null,
+      locked_by: null,
+      updated_at: now
+    })
+    .eq("id", scheduledPostId);
+}
+
 async function markFailed(
   scheduledPostId: string,
   attemptCount: number,
@@ -152,13 +186,11 @@ async function loginAgent(account: AccountRow) {
   if (account.is_active === false) {
     throw new Error("Account is disabled");
   }
-  if (!account.app_password) {
-    throw new Error("Missing app password for account");
-  }
+  const secret = await fetchAccountSecret(account);
   const service = process.env.BLUESKY_SERVICE ?? "https://bsky.social";
   const agent = agentFor(service);
   const identifier = account.handle ?? account.account_did;
-  const loginRes = await agent.login({ identifier, password: account.app_password });
+  const loginRes = await agent.login({ identifier, password: secret });
 
   if (loginRes.data.did && loginRes.data.did !== account.account_did) {
     throw new Error("Account DID mismatch");
@@ -204,6 +236,17 @@ async function loopOnce(): Promise<number> {
         attempt,
         lock_seconds: LOCK_SECONDS
       });
+      if (!job.account_id || !job.account_did) {
+        await logEvent(job.user_id, job.id, "missing_account", {
+          run_at: job.run_at,
+          attempt,
+          error_message: "No connected Bluesky account"
+        });
+        await markMissingAccount(job.id);
+        log("warn", "missing_account", { scheduled_post_id: job.id });
+        continue;
+      }
+
       const draft = await fetchDraft(job.user_id, job.draft_id);
       const account = await fetchAccount(job.account_id, job.account_did);
       await logEvent(job.user_id, job.id, "post_attempt", { run_at: job.run_at, attempt });

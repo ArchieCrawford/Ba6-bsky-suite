@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { Button } from "@/components/ui/Button";
 import { toast } from "sonner";
+import { MobileNav } from "@/components/layout/MobileNav";
 
 export function Topbar() {
   const router = useRouter();
@@ -41,9 +42,12 @@ export function Topbar() {
 
   return (
     <header className="flex flex-col gap-3 border-b border-black/10 bg-white/70 px-4 py-3 backdrop-blur sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4">
-      <div>
-        <div className="text-xs uppercase tracking-[0.2em] text-black/40 sm:text-sm">control panel</div>
-        <div className="text-lg font-semibold text-ink sm:text-xl">Bluesky Ops</div>
+      <div className="flex items-center gap-3">
+        <MobileNav />
+        <div>
+          <div className="text-xs uppercase tracking-[0.2em] text-black/40 sm:text-sm">control panel</div>
+          <div className="text-lg font-semibold text-ink sm:text-xl">Bluesky Ops</div>
+        </div>
       </div>
       <div className="flex flex-wrap items-center gap-2 text-xs text-black/70 sm:text-sm">
         <span className="rounded-full bg-black/5 px-3 py-1 break-all">{email ?? "Signed in"}</span>
