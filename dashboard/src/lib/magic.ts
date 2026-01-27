@@ -1,5 +1,7 @@
 "use client";
 
+import type { EthNetworkConfiguration } from "@magic-sdk/types";
+
 type MagicUserMetadata = {
   issuer?: string | null;
   publicAddress?: string | null;
@@ -44,7 +46,8 @@ async function getEthereumMagic() {
     throw new Error("Magic can only be used in the browser");
   }
   const { Magic } = await import("magic-sdk");
-  ethMagic = new Magic(requireMagicKey(), { network: MAGIC_ETH_NETWORK });
+  const network = normalizeEthNetwork(MAGIC_ETH_NETWORK);
+  ethMagic = new Magic(requireMagicKey(), { network });
   return ethMagic;
 }
 
@@ -146,4 +149,15 @@ export async function logoutMagic() {
   await Promise.all(
     instances.filter(Boolean).map((instance) => (instance as any).user?.logout?.())
   );
+}
+
+function normalizeEthNetwork(value: string): EthNetworkConfiguration {
+  const lowered = value.toLowerCase().trim();
+  if (lowered === "mainnet" || lowered === "goerli" || lowered === "sepolia") {
+    return lowered as EthNetworkConfiguration;
+  }
+  if (lowered.startsWith("http")) {
+    return { rpcUrl: value };
+  }
+  return "mainnet";
 }
