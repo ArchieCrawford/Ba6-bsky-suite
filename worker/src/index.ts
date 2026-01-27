@@ -2,11 +2,14 @@ import "dotenv/config";
 import { randomUUID } from "node:crypto";
 import { supa } from "./supa.js";
 import { agentFor } from "./bsky.js";
+import { processAiImageJobs } from "./aiImages.js";
 
 const POLL_MS = Number(process.env.WORKER_POLL_MS ?? "5000");
 const LOCK_SECONDS = Number(process.env.WORKER_LOCK_SECONDS ?? "45");
 const ERROR_BACKOFF_MS = Number(process.env.WORKER_ERROR_BACKOFF_MS ?? "2000");
 const WORKER_ID = process.env.WORKER_ID ?? `worker-${randomUUID()}`;
+const AI_LOCK_SECONDS = Number(process.env.AI_LOCK_SECONDS ?? "60");
+const AI_BATCH = Number(process.env.AI_JOB_BATCH ?? "2");
 
 type ScheduledRow = {
   id: string;
@@ -224,7 +227,7 @@ async function heartbeat(detail: Record<string, unknown> = {}) {
   if (error) throw error;
 }
 
-async function loopOnce(): Promise<number> {
+async function loopOnce(): Promise<{ scheduled: number; ai: number }> {
   const due = await claimDuePosts(10);
   for (const job of due) {
     const attempt = job.attempt_count;
@@ -300,15 +303,21 @@ async function loopOnce(): Promise<number> {
       });
     }
   }
-  return due.length;
+  const aiProcessed = await processAiImageJobs({
+    workerId: WORKER_ID,
+    lockSeconds: AI_LOCK_SECONDS,
+    batchSize: AI_BATCH,
+    log
+  });
+  return { scheduled: due.length, ai: aiProcessed };
 }
 
 async function main() {
   log("info", "worker_start", { worker_id: WORKER_ID, poll_ms: POLL_MS, lock_seconds: LOCK_SECONDS });
   for (;;) {
     try {
-      const claimedCount = await loopOnce();
-      await heartbeat({ claimed_count: claimedCount });
+      const counts = await loopOnce();
+      await heartbeat({ claimed_count: counts.scheduled, ai_claimed_count: counts.ai });
       await new Promise((r) => setTimeout(r, POLL_MS));
     } catch (e: any) {
       const norm = normalizeError(e);
