@@ -1,21 +1,225 @@
 ---
 title: Feeds
-description: Build and maintain custom feeds in BA6.
+description: Understand how BA6 feeds work and why they can appear empty.
 ---
 
-# Feeds
+# How Bluesky Feeds Work in BA6
 
-## Create a feed
+A custom Bluesky feed is **not** a live search and **not** a real‑time scan of the entire network.
 
-1. Open **Feeds** in the control panel.
-2. Choose a slug and title.
-3. Enable or disable the feed as needed.
+In BA6, a feed is a deterministic pipeline with four stages:
 
-## Rules and sources
+1. **Source selection** — whose posts are eligible
+2. **Indexing** — which posts BA6 knows about
+3. **Filtering rules** — which indexed posts qualify
+4. **Feed delivery** — how Bluesky requests and displays results
 
-- Add include and exclude keywords to shape the content.
-- Add account lists or sources to scope the feed.
+If any stage returns nothing, the feed is empty. This is expected behavior, not a bug.
 
-## Publishing
+---
 
-Feeds become available once enabled. Use the feed URL in Bluesky clients.
+## 1) Feed Sources: defining *who* the feed watches
+
+Every BA6 feed starts by defining **sources**.
+
+A source is usually:
+
+- a Bluesky account (DID)
+- added manually or automatically when the feed is created
+
+Examples:
+
+- “Only my posts”
+- “These 25 journalists”
+- “This curated list of accounts”
+
+Internally, BA6 stores sources as a list of account DIDs tied to the feed.
+
+**Important rule**
+If a feed has no valid sources, it returns nothing. Feeds never default to “everything on Bluesky.”
+
+This prevents accidental global feeds and keeps behavior predictable.
+
+---
+
+## 2) Indexing: how BA6 learns about posts
+
+Feeds do **not** query Bluesky live every time someone opens them.
+
+Instead, BA6 maintains an **index** — a database of posts it has already seen.
+
+### How posts enter the index
+
+There are two paths:
+
+#### A) Scheduled posts (immediate)
+
+When you post through the BA6 scheduler:
+
+1. BA6 publishes the post to Bluesky
+2. BA6 immediately records it in the index
+3. The post appears in relevant feeds right away
+
+This path is instant and guaranteed.
+
+#### B) Manual posts (background sync)
+
+When you post directly in the Bluesky app:
+
+1. The post exists on Bluesky
+2. BA6 does **not** see it instantly
+3. A background indexer periodically checks your account
+4. New posts are pulled in and added to the index
+
+This usually happens within a few minutes, depending on system load.
+
+---
+
+## 3) Feed rules: deciding *which* posts qualify
+
+Once posts are indexed, feed rules determine what appears.
+
+### Keyword rules (most common)
+
+Example rule:
+
+- Keyword: `trump`
+- Case‑insensitive
+- Applied only to posts from the feed’s sources
+
+What this means:
+
+- The feed shows **posts by the selected accounts**
+- **Only if the post text contains the keyword**
+
+If no rules are defined:
+
+- The feed shows **all indexed posts** from the sources
+
+Rules never expand the feed beyond its sources.
+
+---
+
+## 4) Feed delivery: how Bluesky gets the feed
+
+When someone opens your feed in Bluesky:
+
+1. Bluesky calls BA6’s feed endpoint using the AT Protocol
+2. BA6:
+   - identifies the feed by its slug
+   - loads the feed’s sources and rules
+   - queries the index
+   - returns a list of post URIs
+3. Bluesky fetches the full post content and displays it
+
+BA6 does **not** send post text or media to Bluesky — only references. This keeps feeds fast and scalable.
+
+---
+
+## Why feeds can appear “empty”
+
+An empty feed does **not** mean something is broken.
+
+Common reasons:
+
+- No sources are configured
+- Sources exist but no posts are indexed yet
+- Keyword rules don’t match recent posts
+- Manual posts haven’t been indexed yet
+
+In all cases, the feed is behaving correctly based on its configuration.
+
+---
+
+## Scheduler vs Feed (important distinction)
+
+| Feature | Scheduler | Feed |
+| --- | --- | --- |
+| Publishes posts | Yes | No |
+| Indexes posts | Yes (immediate) | No |
+| Shows posts | No | Yes |
+| Reads from Bluesky | No | Yes (via index) |
+
+The scheduler **creates** posts. Feeds **observe** posts that already exist.
+
+---
+
+## Why BA6 uses indexing instead of live search
+
+This design is intentional:
+
+- Predictable results
+- No rate‑limit explosions
+- Lower latency
+- No accidental global scraping
+- Clear user control over sources
+
+It also enables future upgrades without changing feed behavior.
+
+---
+
+## Current scope vs future expansion
+
+### Current (Level 2)
+
+- Feeds watch **curated account lists**
+- Posts are pulled via standard Bluesky RPC calls
+- Ideal for topic tracking with high signal
+
+### Future (Level 3)
+
+- Feeds can ingest the **network‑wide firehose**
+- Same rules, same UI
+- Only the ingestion layer changes
+
+Your feed logic does not need to change to support this later.
+
+---
+
+## Mental model to remember
+
+**Feeds don’t watch Bluesky. Feeds watch what BA6 has indexed from Bluesky.**
+
+If a post isn’t indexed yet, it doesn’t exist to the feed.
+
+---
+
+# Quick Version (One Page)
+
+- **A feed shows posts from specific sources.** If no sources, it’s empty.
+- **BA6 only shows posts it has indexed.** Scheduled posts index instantly; manual posts index in the background.
+- **Rules filter the indexed posts.** Rules never expand beyond your sources.
+- **Bluesky requests a list of post URIs.** BA6 doesn’t send post text, only references.
+
+If your feed is empty, check **sources → indexing → rules** in that order.
+
+---
+
+# For Non‑Technical Creators
+
+Think of a feed like a **playlist**:
+
+- **Sources = the artists you’re following**
+- **Index = the songs you’ve downloaded**
+- **Rules = your filters (only upbeat, only acoustic, etc.)**
+- **Feed delivery = the music player showing the playlist**
+
+If the playlist is empty, it’s usually because:
+
+- you didn’t add any artists,
+- you haven’t downloaded anything yet, or
+- your filters are too strict.
+
+The fix is simple: add sources, give the indexer a few minutes, and loosen rules if needed.
+
+---
+
+# Want this in another format?
+
+We can also:
+
+- **Condense this into a one‑page quick version**
+- **Rewrite it for non‑technical creators**
+- **Add diagrams / SVGs** for the support page
+
+Reply with what you want and we’ll ship it.
