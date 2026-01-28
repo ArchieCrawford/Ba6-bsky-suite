@@ -100,18 +100,12 @@ async function fetchAccountSecret(account: AccountRow): Promise<string> {
   if (!account.vault_secret_id) {
     throw new Error("Missing app password for account");
   }
-  const { data, error } = await supa
-    .schema("vault")
-    .from("decrypted_secrets")
-    .select("decrypted_secret")
-    .eq("id", account.vault_secret_id)
-    .single();
+  const { data, error } = await supa.rpc("get_account_secret", { account_id: account.id });
   if (error) throw error;
-  const secret = (data as any)?.decrypted_secret;
-  if (!secret) {
+  if (!data) {
     throw new Error("Vault secret not found");
   }
-  return String(secret);
+  return String(data);
 }
 
 async function logEvent(
