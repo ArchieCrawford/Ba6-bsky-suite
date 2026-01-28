@@ -6,11 +6,12 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "check": "next build"
   },
   "dependencies": {
     "ba6-bsky-suite": "file:..",
-    "next": "14.2.5",
+    "next": "14.2.35",
     "nextra": "2.13.2",
     "nextra-theme-docs": "2.13.2",
     "react": "18.2.0",

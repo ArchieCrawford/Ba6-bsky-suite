@@ -49,7 +49,7 @@ export default function StatusChecks({
   useEffect(() => {
     let isActive = true;
 
-    const runCheck = async (item: CheckItem) => {
+    const runCheck = async (item: CheckItem): Promise<CheckItem> => {
       if (!item.url) return item;
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 5000);
@@ -59,9 +59,10 @@ export default function StatusChecks({
         const res = await fetch(item.url, { cache: "no-store", signal: controller.signal });
         const latency = Math.round(performance.now() - start);
         clearTimeout(timeout);
+        const status: CheckStatus = res.ok ? "ok" : "down";
         return {
           ...item,
-          status: res.ok ? "ok" : "down",
+          status,
           latency,
           error: res.ok ? undefined : `HTTP ${res.status}`
         };
