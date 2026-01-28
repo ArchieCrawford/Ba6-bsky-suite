@@ -3,7 +3,9 @@
   "quickstart": "Quickstart",
   "guides": "Guides",
   "status": "Status",
+  "terms": "Terms",
   "privacy": "Privacy",
+  "token-disclosure": "Token Disclosure",
   "changelog": "Changelog",
   "support": "Support"
 }

@@ -184,6 +184,40 @@ If a post isn’t indexed yet, it doesn’t exist to the feed.
 
 ---
 
+# Visual: The Feed Pipeline
+
+<div style={{marginTop: '1rem', padding: '1rem', border: '1px solid rgba(16,24,32,0.08)', borderRadius: '16px', background: 'rgba(255,255,255,0.8)'}}>
+  <svg viewBox="0 0 900 160" width="100%" height="160" role="img" aria-label="Feed pipeline diagram">
+    <defs>
+      <linearGradient id="ba6pipe" x1="0" x2="1">
+        <stop offset="0%" stopColor="#1f2a36" />
+        <stop offset="100%" stopColor="#2a9d8f" />
+      </linearGradient>
+    </defs>
+    <rect x="20" y="40" width="180" height="80" rx="14" fill="white" stroke="#1f2a36" strokeWidth="2" />
+    <rect x="240" y="40" width="180" height="80" rx="14" fill="white" stroke="#1f2a36" strokeWidth="2" />
+    <rect x="460" y="40" width="180" height="80" rx="14" fill="white" stroke="#1f2a36" strokeWidth="2" />
+    <rect x="680" y="40" width="200" height="80" rx="14" fill="white" stroke="#1f2a36" strokeWidth="2" />
+
+    <text x="110" y="80" textAnchor="middle" fontSize="18" fill="#101820">Sources</text>
+    <text x="330" y="80" textAnchor="middle" fontSize="18" fill="#101820">Index</text>
+    <text x="550" y="80" textAnchor="middle" fontSize="18" fill="#101820">Rules</text>
+    <text x="780" y="80" textAnchor="middle" fontSize="18" fill="#101820">Feed</text>
+
+    <path d="M200 80 H240" stroke="url(#ba6pipe)" strokeWidth="4" />
+    <path d="M420 80 H460" stroke="url(#ba6pipe)" strokeWidth="4" />
+    <path d="M640 80 H680" stroke="url(#ba6pipe)" strokeWidth="4" />
+    <polygon points="238,74 238,86 248,80" fill="#2a9d8f" />
+    <polygon points="458,74 458,86 468,80" fill="#2a9d8f" />
+    <polygon points="678,74 678,86 688,80" fill="#2a9d8f" />
+  </svg>
+  <div style={{marginTop: '0.5rem', fontSize: '0.85rem', color: 'rgba(16,24,32,0.7)'}}>
+    If any stage is empty, the feed returns nothing — by design.
+  </div>
+</div>
+
+---
+
 # Quick Version (One Page)
 
 - **A feed shows posts from specific sources.** If no sources, it’s empty.

@@ -1,18 +1,271 @@
 ---
-title: BA6 Control Panel Docs
-description: Overview of the BA6 Bluesky Ops Console and automation stack.
+title: BA6 Bluesky Suite
+description: Automation + ops console for Bluesky posting.
 ---
 
-# BA6 Docs
+# BA6 Bluesky Suite
 
-Welcome to the BA6 Control Panel documentation. This site covers scheduling, feed operations, and automation workflows.
+Automation + ops console for Bluesky posting. Schedule posts, manage accounts, track worker health, and audit what happened — without living inside the app 24/7.
 
-## What you can do
+BA6 is built like infrastructure: clear rules, observable pipelines, and predictable execution.
 
-- Schedule Bluesky posts and manage queues.
-- Build and manage custom feeds.
-- Monitor activity across your workspace.
+<div style={{marginTop: '1rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap'}}>
+  <div style={{padding: '0.35rem 0.6rem', borderRadius: '999px', background: 'rgba(16,24,32,0.08)', fontSize: '0.75rem'}}>
+    Sources → Index → Rules → Feed
+  </div>
+  <div style={{padding: '0.35rem 0.6rem', borderRadius: '999px', background: 'rgba(16,24,32,0.08)', fontSize: '0.75rem'}}>
+    Queue → Lock → Post → Audit
+  </div>
+</div>
+<div style={{marginTop: '1rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap'}}>
+  <div style={{padding: '0.35rem 0.6rem', borderRadius: '999px', background: 'rgba(16,24,32,0.08)', fontSize: '0.75rem'}}>
+    Sources → Index → Rules → Feed
+  </div>
+  <div style={{padding: '0.35rem 0.6rem', borderRadius: '999px', background: 'rgba(16,24,32,0.08)', fontSize: '0.75rem'}}>
+    Queue → Lock → Post → Audit
+  </div>
+</div>
 
-## Need help?
+---
 
-Reach out at [archie@ba6-bsky-suite.com](mailto:archie@ba6-bsky-suite.com).
+## What BA6 Includes
+
+### Scheduling Engine
+
+A queue‑based scheduler that turns “I’ll post later” into reliable execution.
+
+**Core capabilities**
+
+- Schedule posts for exact timestamps
+- Retry + backoff on failures
+- Locking so multiple workers don’t double‑post
+- Clear states: queued → posting → posted / failed / canceled
+
+**Why it matters**
+Posting becomes a background process, not a daily manual routine.
+
+<div style={{marginTop: '0.75rem', padding: '0.75rem 0.9rem', border: '1px solid rgba(16,24,32,0.08)', borderRadius: '12px', fontSize: '0.85rem'}}>
+  <strong>Scheduler pipeline:</strong> Draft → Scheduled → Claimed → Posted → Audited
+</div>
+<div style={{marginTop: '0.75rem', padding: '0.75rem 0.9rem', border: '1px solid rgba(16,24,32,0.08)', borderRadius: '12px', fontSize: '0.85rem'}}>
+  <strong>Scheduler pipeline:</strong> Draft → Scheduled → Claimed → Posted → Audited
+</div>
+
+### Drafts Workspace
+
+A drafts area that separates writing from publishing.
+
+**Core capabilities**
+
+- Save drafts before scheduling
+- Lightweight organization for planned content
+- Works even if you haven’t linked a Bluesky account yet (optional wiring)
+
+### Account Management
+
+Connect one or more Bluesky identities and manage status.
+
+**Core capabilities**
+
+- Add / remove identities
+- Track last auth time
+- Mark an account active/inactive
+- Safer separation between users (multi‑tenant by `user_id` + RLS)
+
+**Note**
+BA6 is designed for teams: accounts and data stay scoped to the signed‑in user.
+
+### Ops Console (Dashboard)
+
+A live view of what the system is doing.
+
+**Core capabilities**
+
+- Worker heartbeat monitoring
+- Scheduled post counts by status
+- Event history (audit trail)
+- “What’s broken?” visibility instead of guessing
+
+### Audit + Events
+
+A timeline of system actions.
+
+**Core capabilities**
+
+- Records what happened, when, and why
+- Useful for debugging failed posts or suspicious behavior
+- Makes the system observable (not a black box)
+
+### Multi‑User Workspaces
+
+BA6 is built to support multiple users safely.
+
+**How it’s enforced**
+
+- Every table keyed by `user_id`
+- Row Level Security (RLS) policies enforce separation
+- Service role used only for worker actions (server‑side)
+
+### Public Status + Health
+
+BA6 exposes health endpoints for monitoring.
+
+**Endpoints**
+
+- `/healthz` → simple “ok”
+- `/__version` → commit + timestamp (deployment sanity check)
+
+---
+
+## Modules Overview (no Feeds)
+
+Below is a systems map of BA6 modules and what each one does.
+
+### 1) Dashboard (Web App)
+
+**Purpose:** user interface for scheduling, accounts, drafts, and ops visibility.
+
+**Key pages:** Overview, Scheduled, Drafts, Events, Accounts.
+
+**Current focus improvements**
+
+- Mobile layout + safe‑area spacing
+- Better navigation behavior on iOS browser toolbars
+
+### 2) Worker (Scheduler)
+
+**Purpose:** background process that claims queued jobs and posts at the right time.
+
+**Responsibilities**
+
+- Claim jobs using RPC lock
+- Transition statuses
+- Retry & record errors
+- Write post events for audit trail
+
+### 3) Database (Supabase)
+
+**Purpose:** durable storage + security boundary.
+
+**Responsibilities**
+
+- User profiles + accounts
+- Drafts + scheduled posts
+- Events + worker heartbeats
+- RLS policies (multi‑user isolation)
+
+### 4) Auth (Supabase Auth)
+
+**Purpose:** identity and access control.
+
+**Supports**
+
+- Email/password auth
+- Optional wallet‑based sign‑in (Solana/Ethereum) when configured
+- Automatic profile row creation (recommended via trigger)
+
+### 5) Support Site (Public Docs)
+
+**Purpose:** public documentation and system info, accessible without login.
+
+**Includes**
+
+- Product overview (this page)
+- Guides & runbooks
+- Privacy & security notes
+- Status pages & troubleshooting
+
+---
+
+## Current Updates by Module
+
+### Dashboard Updates
+
+- Improved build stability for monorepo deployments
+- Fixed UI issues causing missing component compile errors
+- Ongoing: mobile navigation improvements (bottom bar conflicts with browser UI)
+
+### Worker Updates
+
+- Added environment‑based config support (service DID, endpoints)
+- Improved publishing checks and clearer errors (ex: invalid service URL)
+- Ongoing: handling “no connected Bluesky account” cases cleanly
+
+### Database Updates
+
+- Multi‑user RLS implemented across core tables
+- Added audit/event logging for traceability
+- Ongoing: schema drift fixes (ex: missing `feeds.title` in older DBs — handled via safe migrations)
+
+### Auth Updates
+
+- Email sign‑in supported now
+- Wallet auth enabled in Supabase settings (but requires client‑side wallet connector + SIWE/SIWS flows)
+- Ongoing: cleaner mobile UX for wallet prompts and fallback behavior
+
+### Infrastructure Updates
+
+- Feed service identity routes added (`/.well-known/did.json`, `/healthz`)
+- Render custom domain wired (feeds.ba6-bsky-suite.com)
+- Added version endpoint for debugging deploys (`/__version`)
+
+### Support Site Updates
+
+- Nextra docs site deployed publicly at support.ba6-bsky-suite.com
+- Ongoing: better homepage, guides, and an operational “Status” page that checks live endpoints
+
+---
+
+## Quick Start (for new users)
+
+1. Create an account (email login)
+2. Add a Bluesky account (app password or token)
+3. Write drafts
+4. Schedule posts
+5. Monitor execution in Overview + Events
+
+---
+
+## Quick Version (one page)
+
+- **Schedule posts** and let BA6 execute them reliably.
+- **Connect Bluesky accounts** to control where posts go.
+- **Indexing keeps feeds deterministic** — only known posts appear.
+- **Events tell you what happened** when something fails.
+
+If something looks empty, check **sources → indexing → rules**.
+---
+
+## Quick Version (one page)
+
+- **Schedule posts** and let BA6 execute them reliably.
+- **Connect Bluesky accounts** to control where posts go.
+- **Indexing keeps feeds deterministic** — only known posts appear.
+- **Events tell you what happened** when something fails.
+
+If something looks empty, check **sources → indexing → rules**.
+
+---
+
+## Support
+
+Email: [archie@ba6-bsky-suite.com](mailto:archie@ba6-bsky-suite.com)
+
+Include:
+
+- your username/handle
+- approximate time of issue
+- what page you were on
+- any error message shown
+
+---
+
+## Models (Operational Building Blocks)
+
+BA6 ships as a set of operational building blocks (“models”) you can combine.
+
+- **Scheduler Model** — time‑based execution with retries
+- **Queue Model** — claim/lock pattern for safe concurrency
+- **Audit Model** — events + traceability
+- **Workspace Model** — multi‑user isolation with RLS
+- **Status Model** — health + version endpoints for monitoring
