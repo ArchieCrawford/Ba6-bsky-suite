@@ -21,10 +21,17 @@ function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function matchesKeyword(text: string, keyword: string) {
+function matchesKeyword(text: string, keyword: string, caseInsensitive = true) {
   const trimmed = keyword.trim();
   if (!trimmed) return false;
-  const pattern = new RegExp(`(^|\\W)${escapeRegExp(trimmed)}($|\\W)`, "i");
+  const pattern = new RegExp(`(^|\\W)${escapeRegExp(trimmed)}($|\\W)`, caseInsensitive ? "i" : undefined);
+  return pattern.test(text);
+}
+
+function matchesTag(text: string, tag: string, caseInsensitive = true) {
+  const trimmed = tag.trim();
+  if (!trimmed) return false;
+  const pattern = new RegExp(`(^|\\W)#?${escapeRegExp(trimmed)}($|\\W)`, caseInsensitive ? "i" : undefined);
   return pattern.test(text);
 }
 
@@ -77,13 +84,31 @@ async function getFeedConfig(slug: string) {
 async function getFeedRules(feedId: string) {
   const { data, error } = await supa
     .from("feed_rules")
-    .select("include_keywords,exclude_keywords,lang")
+    .select(
+      "include_keywords,exclude_keywords,lang,include_mode,case_insensitive,submit_enabled,submit_tag"
+    )
     .eq("feed_id", feedId)
     .single();
   if (error) {
-    return { include_keywords: [], exclude_keywords: [], lang: null as any };
+    return {
+      include_keywords: [],
+      exclude_keywords: [],
+      lang: null as any,
+      include_mode: "any",
+      case_insensitive: true,
+      submit_enabled: false,
+      submit_tag: null as any
+    };
   }
-  return data as { include_keywords: string[]; exclude_keywords: string[]; lang: string | null };
+  return data as {
+    include_keywords: string[];
+    exclude_keywords: string[];
+    lang: string | null;
+    include_mode: string | null;
+    case_insensitive: boolean | null;
+    submit_enabled: boolean | null;
+    submit_tag: string | null;
+  };
 }
 
 async function getFeedSources(feedId: string) {
@@ -99,6 +124,8 @@ async function queryPosts(params: {
   authorDids: string[];
   include: string[];
   exclude: string[];
+  includeMode: "any" | "all";
+  caseInsensitive: boolean;
   lang?: string | null;
   limit: number;
   cursor?: { created_at: string; uri: string } | null;
@@ -127,8 +154,53 @@ async function queryPosts(params: {
 
   const filtered = (data ?? []).filter((row: any) => {
     const t = String(row.text ?? "");
-    if (include.length && !include.some((k) => matchesKeyword(t, k))) return false;
-    if (exclude.length && exclude.some((k) => matchesKeyword(t, k))) return false;
+    const matchedInclude = include.filter((k) => matchesKeyword(t, k, params.caseInsensitive));
+    const matchedExclude = exclude.filter((k) => matchesKeyword(t, k, params.caseInsensitive));
+    const passesInclude =
+      include.length === 0 ||
+      (params.includeMode === "all" ? matchedInclude.length === include.length : matchedInclude.length > 0);
+    const passesExclude = matchedExclude.length === 0;
+    if (!passesInclude || !passesExclude) return false;
+    return true;
+  });
+
+  return filtered as { uri: string; created_at: string; author_did: string; text: string }[];
+}
+
+async function querySubmitPosts(params: {
+  tag: string;
+  exclude: string[];
+  caseInsensitive: boolean;
+  lang?: string | null;
+  limit: number;
+  cursor?: { created_at: string; uri: string } | null;
+}) {
+  let q = supa
+    .from("indexed_posts")
+    .select("uri,created_at,text,author_did")
+    .order("created_at", { ascending: false })
+    .order("uri", { ascending: false })
+    .limit(params.limit);
+
+  if (params.lang) q = q.eq("lang", params.lang);
+
+  const tagFilter = `%${params.tag}%`;
+  q = params.caseInsensitive ? q.ilike("text", tagFilter) : q.like("text", tagFilter);
+
+  if (params.cursor) {
+    const { created_at, uri } = params.cursor;
+    const safeUri = escapeFilterValue(uri);
+    q = q.or(`created_at.lt.${created_at},and(created_at.eq.${created_at},uri.lt.${safeUri})`);
+  }
+
+  const { data, error } = await q;
+  if (error) throw error;
+
+  const exclude = params.exclude.map((s) => s.trim()).filter(Boolean);
+  const filtered = (data ?? []).filter((row: any) => {
+    const t = String(row.text ?? "");
+    if (!matchesTag(t, params.tag, params.caseInsensitive)) return false;
+    if (exclude.length && exclude.some((k) => matchesKeyword(t, k, params.caseInsensitive))) return false;
     return true;
   });
 
@@ -209,18 +281,47 @@ app.get("/xrpc/app.bsky.feed.getFeedSkeleton", async (req: Request, res: Respons
       .filter((did) => did && did.startsWith("did:") && did.length > 5)
       .filter((did) => !did.toUpperCase().includes("REPLACE_ME"));
 
-    if (authorDids.length === 0) {
-      return res.json({ feed: [], cursor: undefined });
+    const includeMode = (rules.include_mode ?? "any") as "any" | "all";
+    const caseInsensitive = rules.case_insensitive ?? true;
+
+    let posts: { uri: string; created_at: string; author_did: string; text: string }[] = [];
+
+    if (authorDids.length > 0) {
+      posts = await queryPosts({
+        authorDids,
+        include: rules.include_keywords ?? [],
+        exclude: rules.exclude_keywords ?? [],
+        includeMode,
+        caseInsensitive,
+        lang: rules.lang,
+        limit,
+        cursor
+      });
     }
 
-    const posts = await queryPosts({
-      authorDids,
-      include: rules.include_keywords ?? [],
-      exclude: rules.exclude_keywords ?? [],
-      lang: rules.lang,
-      limit,
-      cursor
-    });
+    if (rules.submit_enabled && rules.submit_tag) {
+      const submitPosts = await querySubmitPosts({
+        tag: rules.submit_tag,
+        exclude: rules.exclude_keywords ?? [],
+        caseInsensitive,
+        lang: rules.lang,
+        limit,
+        cursor
+      });
+
+      const merged = new Map<string, { uri: string; created_at: string; author_did: string; text: string }>();
+      for (const row of [...posts, ...submitPosts]) {
+        if (!merged.has(row.uri)) merged.set(row.uri, row);
+      }
+      posts = Array.from(merged.values()).sort((a, b) => {
+        if (a.created_at === b.created_at) return b.uri.localeCompare(a.uri);
+        return b.created_at.localeCompare(a.created_at);
+      });
+    }
+
+    if (posts.length === 0) {
+      return res.json({ feed: [], cursor: undefined });
+    }
 
     const skeleton = posts.map((p) => ({ post: p.uri }));
     const nextCursor = posts.length

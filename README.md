@@ -126,6 +126,10 @@ Indexer env vars (worker):
 - `INDEXER_INTERVAL_MS` (default `120000`)
 - `INDEXER_COOLDOWN_MS` (default equals interval)
 - `INDEXER_LIMIT` (default `50`)
+- `INDEXER_MAX_DIDS_PER_TICK` (default `25`)
+- `INDEXER_JITTER_MS` (default `5000`)
+- `JOIN_ACCOUNT_DID` (required for opt-in hashtag enrollment)
+- `JOIN_ACCOUNT_HANDLE` (optional override for the join account handle)
 
 ## Seed example (run once)
 

@@ -19,7 +19,19 @@ type FeedPostRecord = {
   langs?: string[];
 };
 
+type SearchPostRecord = {
+  text?: string;
+};
+
+type OptInRule = {
+  feed_id: string;
+  opt_in_tag: string;
+  opt_in_mode: "public" | "moderated";
+  source_strategy: "curated" | "opt_in";
+};
+
 const DEFAULT_INTERVAL_MS = 120000;
+const OPT_IN_MAX_PER_HOUR = 20;
 
 function parseBool(value: string | undefined, fallback: boolean) {
   if (value == null) return fallback;
@@ -37,6 +49,15 @@ function getOptions(): IndexerOptions {
   return { enabled, intervalMs, limit, cooldownMs, service, maxDidsPerTick, jitterMs };
 }
 
+function normalizeTag(tag: string) {
+  return tag.trim().replace(/^#+/, "").toLowerCase();
+}
+
+function extractTags(text: string) {
+  const matches = text.match(/#[\\w-]+/g) ?? [];
+  return matches.map((tag) => normalizeTag(tag));
+}
+
 async function fetchSourceDids() {
   const { data, error } = await supa
     .from("feed_sources")
@@ -49,6 +70,23 @@ async function fetchSourceDids() {
     .map((row: any) => String(row.account_did ?? "").trim())
     .filter((did) => did && !did.toUpperCase().includes("REPLACE_ME"));
   return Array.from(new Set(raw));
+}
+
+async function fetchOptInRules() {
+  const { data, error } = await supa
+    .from("feed_rules")
+    .select("feed_id,opt_in_tag,opt_in_mode,opt_in_enabled,source_strategy")
+    .eq("opt_in_enabled", true)
+    .not("opt_in_tag", "is", null);
+  if (error) throw error;
+  return (data ?? [])
+    .map((row: any) => ({
+      feed_id: row.feed_id,
+      opt_in_tag: normalizeTag(String(row.opt_in_tag ?? "")),
+      opt_in_mode: (row.opt_in_mode ?? "public") as "public" | "moderated",
+      source_strategy: (row.source_strategy ?? "curated") as "curated" | "opt_in"
+    }))
+    .filter((row: OptInRule) => row.opt_in_tag && row.source_strategy === "opt_in");
 }
 
 async function indexDid(agent: ReturnType<typeof agentFor>, did: string, limit: number) {
@@ -90,6 +128,9 @@ export function startIndexer(log: Logger) {
   const lastRun = new Map<string, number>();
   let running = false;
   let firstRun = true;
+  let joinHandle: string | null = process.env.JOIN_ACCOUNT_HANDLE?.trim() || null;
+  const joinDid = process.env.JOIN_ACCOUNT_DID?.trim() || null;
+  const enrollmentState = new Map<string, { windowStart: number; count: number }>();
 
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
   const shuffle = <T,>(arr: T[]) => {
@@ -99,6 +140,114 @@ export function startIndexer(log: Logger) {
       [copy[i], copy[j]] = [copy[j], copy[i]];
     }
     return copy;
+  };
+
+  const canEnroll = (feedId: string) => {
+    const now = Date.now();
+    const entry = enrollmentState.get(feedId);
+    if (!entry || now - entry.windowStart > 60 * 60 * 1000) {
+      enrollmentState.set(feedId, { windowStart: now, count: 0 });
+      return true;
+    }
+    return entry.count < OPT_IN_MAX_PER_HOUR;
+  };
+
+  const recordEnrollment = (feedId: string) => {
+    const now = Date.now();
+    const entry = enrollmentState.get(feedId);
+    if (!entry || now - entry.windowStart > 60 * 60 * 1000) {
+      enrollmentState.set(feedId, { windowStart: now, count: 1 });
+    } else {
+      entry.count += 1;
+      enrollmentState.set(feedId, entry);
+    }
+  };
+
+  const resolveJoinHandle = async () => {
+    if (joinHandle || !joinDid) return joinHandle;
+    try {
+      const profile = await agent.api.app.bsky.actor.getProfile({ actor: joinDid });
+      joinHandle = profile.data.handle ?? null;
+    } catch (err: any) {
+      log("warn", "indexer_join_handle_failed", { error_message: err?.message ?? String(err) });
+    }
+    return joinHandle;
+  };
+
+  const runOptInScan = async () => {
+    if (!joinDid) return;
+    const rules = await fetchOptInRules();
+    if (!rules.length) return;
+    const handle = await resolveJoinHandle();
+    if (!handle) return;
+
+    const response = await agent.api.app.bsky.feed.searchPosts({ q: `@${handle}`, limit: opts.limit });
+    const posts = response.data.posts ?? [];
+    const tagMap = new Map<string, OptInRule[]>();
+    for (const rule of rules) {
+      const key = normalizeTag(rule.opt_in_tag);
+      if (!tagMap.has(key)) tagMap.set(key, []);
+      tagMap.get(key)?.push(rule);
+    }
+
+    const seen = new Set<string>();
+    for (const post of posts) {
+      const record = post.record as SearchPostRecord | undefined;
+      const text = typeof record?.text === "string" ? record.text : "";
+      const tags = extractTags(text);
+      if (!tags.length) continue;
+      const authorDid = post.author?.did;
+      if (!authorDid) continue;
+      for (const tag of tags) {
+        const rulesForTag = tagMap.get(tag);
+        if (!rulesForTag) continue;
+        for (const rule of rulesForTag) {
+          const key = `${rule.feed_id}:${authorDid}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+
+          if (!canEnroll(rule.feed_id)) {
+            log("warn", "indexer_opt_in_rate_limited", { feed_id: rule.feed_id, author_did: authorDid });
+            continue;
+          }
+
+          if (rule.opt_in_mode === "moderated") {
+            const { error: insertError } = await supa.from("feed_join_requests").insert({
+              feed_id: rule.feed_id,
+              account_did: authorDid,
+              status: "pending"
+            });
+            if (insertError && String(insertError.code) !== "23505") {
+              log("error", "indexer_opt_in_request_failed", {
+                feed_id: rule.feed_id,
+                author_did: authorDid,
+                error_message: insertError.message
+              });
+            } else {
+              recordEnrollment(rule.feed_id);
+              log("info", "indexer_opt_in_requested", { feed_id: rule.feed_id, author_did: authorDid });
+            }
+            continue;
+          }
+
+          const { error: insertError } = await supa.from("feed_sources").insert({
+            feed_id: rule.feed_id,
+            source_type: "account_list",
+            account_did: authorDid
+          });
+          if (insertError && String(insertError.code) !== "23505") {
+            log("error", "indexer_opt_in_failed", {
+              feed_id: rule.feed_id,
+              author_did: authorDid,
+              error_message: insertError.message
+            });
+          } else {
+            recordEnrollment(rule.feed_id);
+            log("info", "indexer_opt_in_enrolled", { feed_id: rule.feed_id, author_did: authorDid });
+          }
+        }
+      }
+    }
   };
 
   const runOnce = async () => {
@@ -125,6 +274,8 @@ export function startIndexer(log: Logger) {
         }
         await sleep(250 + Math.floor(Math.random() * 500));
       }
+
+      await runOptInScan();
     } catch (err: any) {
       log("error", "indexer_failed", { error_message: err?.message ?? String(err) });
     } finally {
