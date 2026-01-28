@@ -206,7 +206,8 @@ app.get("/xrpc/app.bsky.feed.getFeedSkeleton", async (req: Request, res: Respons
     const authorDids = sources
       .filter((s) => s.source_type === "account_list" && s.account_did)
       .map((s) => String(s.account_did ?? "").trim())
-      .filter((did) => did && !did.toUpperCase().includes("REPLACE_ME"));
+      .filter((did) => did && did.startsWith("did:") && did.length > 5)
+      .filter((did) => !did.toUpperCase().includes("REPLACE_ME"));
 
     if (authorDids.length === 0) {
       return res.json({ feed: [], cursor: undefined });

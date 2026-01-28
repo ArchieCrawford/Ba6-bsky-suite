@@ -163,12 +163,19 @@ export async function POST(request: Request) {
     const feed = await fetchFeed(supa, input, data.user.id);
     const account = await fetchAccount(supa, data.user.id, input.accountDid, input.handle);
 
-    const { error: deleteError } = await supa
+    const { error: deleteExactError } = await supa
       .from("feed_sources")
       .delete()
       .eq("feed_id", feed.id)
-      .or("account_did.eq.did:plc:REPLACE_ME,account_did.ilike.%REPLACE_ME%");
-    if (deleteError) throw deleteError;
+      .eq("account_did", "did:plc:REPLACE_ME");
+    if (deleteExactError) throw deleteExactError;
+
+    const { error: deleteLikeError } = await supa
+      .from("feed_sources")
+      .delete()
+      .eq("feed_id", feed.id)
+      .ilike("account_did", "%REPLACE_ME%");
+    if (deleteLikeError) throw deleteLikeError;
 
     const { data: sources, error: sourcesError } = await supa
       .from("feed_sources")
@@ -180,12 +187,15 @@ export async function POST(request: Request) {
     if (sourcesError) throw sourcesError;
 
     if (!sources || sources.length === 0) {
-      const { error: insertError } = await supa.from("feed_sources").insert({
+      const payload = {
         feed_id: feed.id,
         source_type: "account_list",
         account_did: account.account_did
-      });
-      if (insertError) throw insertError;
+      };
+      const { error: upsertError } = await supa
+        .from("feed_sources")
+        .upsert(payload, { onConflict: "feed_id,source_type,account_did" });
+      if (upsertError) throw upsertError;
     }
 
     const agent = await loginAgent(supa, account);

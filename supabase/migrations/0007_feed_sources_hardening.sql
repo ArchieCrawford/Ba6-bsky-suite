@@ -8,6 +8,9 @@ delete from public.feed_sources
 where account_did = 'did:plc:REPLACE_ME'
    or account_did ilike '%REPLACE_ME%';
 
+delete from public.feed_sources
+where account_did is not null and length(btrim(account_did)) = 0;
+
 do $$
 begin
   if not exists (
@@ -37,5 +40,9 @@ begin
     execute 'alter table public.feed_sources add constraint feed_sources_account_list_requires_did check (source_type <> ''account_list'' or account_did is not null)';
   end if;
 end $$;
+
+create unique index if not exists feed_sources_unique
+on public.feed_sources (feed_id, source_type, account_did)
+where account_did is not null;
 
 commit;

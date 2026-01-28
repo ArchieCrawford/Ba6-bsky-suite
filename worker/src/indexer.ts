@@ -9,6 +9,8 @@ type IndexerOptions = {
   limit: number;
   cooldownMs: number;
   service: string;
+  maxDidsPerTick: number;
+  jitterMs: number;
 };
 
 type FeedPostRecord = {
@@ -29,8 +31,10 @@ function getOptions(): IndexerOptions {
   const intervalMs = Number(process.env.INDEXER_INTERVAL_MS ?? `${DEFAULT_INTERVAL_MS}`) || DEFAULT_INTERVAL_MS;
   const limit = Number(process.env.INDEXER_LIMIT ?? "50") || 50;
   const cooldownMs = Number(process.env.INDEXER_COOLDOWN_MS ?? `${intervalMs}`) || intervalMs;
+  const maxDidsPerTick = Number(process.env.INDEXER_MAX_DIDS_PER_TICK ?? "25") || 25;
+  const jitterMs = Number(process.env.INDEXER_JITTER_MS ?? "5000") || 5000;
   const service = process.env.BLUESKY_SERVICE ?? "https://bsky.social";
-  return { enabled, intervalMs, limit, cooldownMs, service };
+  return { enabled, intervalMs, limit, cooldownMs, service, maxDidsPerTick, jitterMs };
 }
 
 async function fetchSourceDids() {
@@ -86,14 +90,31 @@ export function startIndexer(log: Logger) {
   const agent = agentFor(opts.service);
   const lastRun = new Map<string, number>();
   let running = false;
+  let firstRun = true;
+
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+  const shuffle = <T,>(arr: T[]) => {
+    const copy = arr.slice();
+    for (let i = copy.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    return copy;
+  };
 
   const runOnce = async () => {
     if (running) return;
     running = true;
     try {
+      if (firstRun && opts.jitterMs > 0) {
+        await sleep(Math.floor(Math.random() * opts.jitterMs));
+      }
+      firstRun = false;
+
       const dids = await fetchSourceDids();
       const now = Date.now();
-      for (const did of dids) {
+      const candidates = shuffle(dids).slice(0, opts.maxDidsPerTick);
+      for (const did of candidates) {
         const last = lastRun.get(did);
         if (last && now - last < opts.cooldownMs) continue;
         try {
@@ -103,6 +124,7 @@ export function startIndexer(log: Logger) {
         } catch (err: any) {
           log("error", "indexer_did_failed", { did, error_message: err?.message ?? String(err) });
         }
+        await sleep(250 + Math.floor(Math.random() * 500));
       }
     } catch (err: any) {
       log("error", "indexer_failed", { error_message: err?.message ?? String(err) });
@@ -114,7 +136,9 @@ export function startIndexer(log: Logger) {
   log("info", "indexer_start", {
     interval_ms: opts.intervalMs,
     limit: opts.limit,
-    cooldown_ms: opts.cooldownMs
+    cooldown_ms: opts.cooldownMs,
+    max_dids_per_tick: opts.maxDidsPerTick,
+    jitter_ms: opts.jitterMs
   });
 
   runOnce();
