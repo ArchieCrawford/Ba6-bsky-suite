@@ -265,8 +265,7 @@ async function loopOnce(): Promise<{ scheduled: number; ai: number }> {
         author_did: job.account_did,
         text: draft.text,
         created_at: new Date().toISOString(),
-        lang: null,
-        raw: { cid: posted.cid, scheduled_post_id: job.id }
+        lang: null
       });
 
       await markPosted(job.id, posted.uri, posted.cid);

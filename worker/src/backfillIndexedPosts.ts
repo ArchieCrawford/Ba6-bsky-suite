@@ -42,12 +42,7 @@ async function main() {
         author_did: post.author?.did ?? did,
         text,
         created_at: createdAt,
-        lang,
-        raw: {
-          cid: post.cid,
-          source: "backfill",
-          record
-        }
+        lang
       };
     });
 

@@ -68,8 +68,7 @@ async function indexDid(agent: ReturnType<typeof agentFor>, did: string, limit: 
         author_did: post.author?.did ?? did,
         text,
         created_at: createdAt,
-        lang,
-        raw: { cid: post.cid, source: "indexer" }
+        lang
       };
     });
 
