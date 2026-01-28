@@ -25,6 +25,25 @@ type WalletUpsertInput = PendingWallet & {
 
 type EnsureResult = { ok: true; wallet: WalletRow } | { ok: false; error: string };
 
+const RETRY_DELAYS_MS = [0, 350, 700];
+
+async function wait(ms: number) {
+  if (ms <= 0) return;
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function ensureUserRow(userId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  for (let attempt = 0; attempt < RETRY_DELAYS_MS.length; attempt += 1) {
+    await wait(RETRY_DELAYS_MS[attempt]);
+    const { data, error } = await supabase.from("users").select("id").eq("id", userId).maybeSingle();
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+    if (data?.id) return { ok: true };
+  }
+  return { ok: false, error: "Profile row missing. Please retry in a moment." };
+}
+
 export async function ensureUserAndWallet(input: WalletUpsertInput): Promise<EnsureResult> {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError) {
@@ -35,9 +54,9 @@ export async function ensureUserAndWallet(input: WalletUpsertInput): Promise<Ens
     return { ok: false, error: "Missing user session" };
   }
 
-  const { error: upsertUserError } = await supabase.from("users").upsert({ id: user.id }, { onConflict: "id" });
-  if (upsertUserError) {
-    return { ok: false, error: upsertUserError.message };
+  const ensureResult = await ensureUserRow(user.id);
+  if (!ensureResult.ok) {
+    return { ok: false, error: ensureResult.error };
   }
 
   const payload = {

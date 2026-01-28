@@ -1,10 +1,19 @@
 ---
 title: Status
-description: Service status and operational updates.
+description: Live health checks for BA6 services.
 ---
+
+import StatusChecks from "../components/StatusChecks";
 
 # Status
 
-BA6 services are operational. For incident updates or outages, check the **Events** page inside the app.
+Below is a live health snapshot for the BA6 stack.
+
+<StatusChecks />
+
+## Notes
+
+- Render health defaults to the feedgen service URL. If yours is different, set `NEXT_PUBLIC_RENDER_HEALTH_URL`.
+- Vercel health checks the docs site `/api/healthz` by default.
 
 If you need assistance, email [archie@ba6-bsky-suite.com](mailto:archie@ba6-bsky-suite.com).

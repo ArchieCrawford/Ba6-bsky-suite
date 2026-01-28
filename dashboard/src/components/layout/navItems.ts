@@ -6,7 +6,8 @@ import {
   MessageSquare,
   Rss,
   Users,
-  Activity
+  Activity,
+  LifeBuoy
 } from "lucide-react";
 
 export const navItems = [
@@ -17,5 +18,6 @@ export const navItems = [
   { href: "/generate/text", label: "Generate Text", icon: MessageSquare },
   { href: "/feeds", label: "Feeds", icon: Rss },
   { href: "/accounts", label: "Accounts", icon: Users },
-  { href: "/events", label: "Events", icon: Activity }
+  { href: "/events", label: "Events", icon: Activity },
+  { href: "https://support.ba6-bsky-suite.com", label: "Support", icon: LifeBuoy, external: true }
 ];

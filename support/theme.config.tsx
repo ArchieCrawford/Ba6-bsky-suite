@@ -23,7 +23,7 @@ const config: DocsThemeConfig = {
   footer: {
     text: (
       <span>
-        Support: <a href={`mailto:${supportEmail}`}>{supportEmail}</a>
+        Contact: <a href={`mailto:${supportEmail}`}>{supportEmail}</a>
       </span>
     )
   },

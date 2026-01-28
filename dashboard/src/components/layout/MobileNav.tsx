@@ -15,6 +15,15 @@ export function MobileNav() {
     setOpen(false);
   }, [pathname]);
 
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
+
   return (
     <>
       <button
@@ -56,19 +65,34 @@ export function MobileNav() {
 
           <nav className="flex-1 space-y-2 p-4">
             {navItems.map((item) => {
-              const active = pathname === item.href;
+              const active = !item.external && pathname === item.href;
               const Icon = item.icon;
+              const className = clsx(
+                "flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition",
+                active
+                  ? "bg-ink text-white shadow"
+                  : "text-black/70 hover:bg-black/5 hover:text-black"
+              );
+              if (item.external) {
+                return (
+                  <a
+                    key={item.href}
+                    href={item.href}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={className}
+                  >
+                    <Icon size={16} />
+                    {item.label}
+                  </a>
+                );
+              }
               return (
                 <Link
                   key={item.href}
                   href={item.href}
                   aria-current={active ? "page" : undefined}
-                  className={clsx(
-                    "flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition",
-                    active
-                      ? "bg-ink text-white shadow"
-                      : "text-black/70 hover:bg-black/5 hover:text-black"
-                  )}
+                  className={className}
                 >
                   <Icon size={16} />
                   {item.label}

@@ -285,6 +285,18 @@ export default function LoginPage() {
               Connect Wallet (Magic)
             </Button>
           </div>
+
+          <div className="mt-6 text-center text-xs text-black/50">
+            Need help?{" "}
+            <a
+              className="font-semibold text-black/70 underline-offset-2 hover:underline"
+              href="https://support.ba6-bsky-suite.com"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Support
+            </a>
+          </div>
         </div>
       </div>
     </Card>

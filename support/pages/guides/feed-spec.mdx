@@ -1,0 +1,49 @@
+---
+title: Feed Spec (app.bsky.feed.getFeed)
+description: Request/response shape for Bluesky feed endpoints.
+---
+
+# Feed Spec (app.bsky.feed.getFeed)
+
+`app.bsky.feed.getFeed` is the AppView endpoint used to fetch a feed’s items. It accepts a feed URI, optional pagination, and returns hydrated post data.
+
+## Request
+
+```
+GET /xrpc/app.bsky.feed.getFeed?feed=<feedUri>&limit=<n>&cursor=<cursor>
+```
+
+Parameters:
+
+- `feed` (required): feed URI, for example `at://did:plc:.../app.bsky.feed.generator/your-slug`
+- `limit` (optional): number of posts to return
+- `cursor` (optional): pagination cursor
+
+## Response (simplified)
+
+```
+{
+  "feed": [
+    {
+      "post": { "uri": "...", "cid": "...", "author": { "handle": "..." } },
+      "reason": null
+    }
+  ],
+  "cursor": "..."
+}
+```
+
+## BA6 feed generators
+
+BA6 feed generators implement the **skeleton** endpoint `app.bsky.feed.getFeedSkeleton` and return post URIs + cursor. Clients then resolve the posts with `app.bsky.feed.getPosts`.
+
+If you’re pointing a client at BA6:
+
+```
+GET /xrpc/app.bsky.feed.getFeedSkeleton?feed=<slug-or-uri>&limit=<n>&cursor=<cursor>
+```
+
+The `feed` parameter supports either:
+
+- `at://did:plc:.../app.bsky.feed.generator/<slug>`
+- `<slug>` (BA6-normalized)

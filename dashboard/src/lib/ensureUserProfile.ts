@@ -2,14 +2,11 @@ import { supabase } from "@/lib/supabaseClient";
 
 type EnsureResult = { ok: true } | { ok: false; error: string };
 
-function pickDisplayName(user: { user_metadata?: Record<string, unknown> } | null | undefined) {
-  if (!user?.user_metadata) return null;
-  const metadata = user.user_metadata;
-  const fullName = metadata.full_name;
-  if (typeof fullName === "string" && fullName.trim()) return fullName.trim();
-  const name = metadata.name;
-  if (typeof name === "string" && name.trim()) return name.trim();
-  return null;
+const RETRY_DELAYS_MS = [0, 350, 700];
+
+async function wait(ms: number) {
+  if (ms <= 0) return;
+  await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export async function ensureUserProfile(): Promise<EnsureResult> {
@@ -22,17 +19,20 @@ export async function ensureUserProfile(): Promise<EnsureResult> {
     return { ok: false, error: "Missing user session" };
   }
 
-  const { error: upsertError } = await supabase.from("users").upsert(
-    {
-      id: user.id,
-      display_name: pickDisplayName(user)
-    },
-    { onConflict: "id" }
-  );
-
-  if (upsertError) {
-    return { ok: false, error: upsertError.message };
+  for (let attempt = 0; attempt < RETRY_DELAYS_MS.length; attempt += 1) {
+    await wait(RETRY_DELAYS_MS[attempt]);
+    const { data, error } = await supabase
+      .from("users")
+      .select("id")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+    if (data?.id) {
+      return { ok: true };
+    }
   }
 
-  return { ok: true };
+  return { ok: false, error: "Profile row missing. Please retry in a moment." };
 }
