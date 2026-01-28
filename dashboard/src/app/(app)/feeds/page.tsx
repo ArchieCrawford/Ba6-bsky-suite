@@ -64,6 +64,20 @@ export default function FeedsPage() {
   const [testResults, setTestResults] = useState<TestRow[]>([]);
   const [testing, setTesting] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [savingFeed, setSavingFeed] = useState(false);
+  const [createSlug, setCreateSlug] = useState("");
+  const [createTitle, setCreateTitle] = useState("");
+  const [createDescription, setCreateDescription] = useState("");
+  const [creatingFeed, setCreatingFeed] = useState(false);
+
+  const normalizeSlug = (value: string) =>
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9-]+/g, "-")
+      .replace(/^-+|-+$/g, "");
 
   const filteredFeeds = useMemo(() => {
     const term = search.toLowerCase();
@@ -342,6 +356,89 @@ export default function FeedsPage() {
     }
   }, [selectedFeedId]);
 
+  useEffect(() => {
+    if (!selectedFeed) {
+      setEditTitle("");
+      setEditDescription("");
+      return;
+    }
+    setEditTitle(selectedFeed.title ?? selectedFeed.display_name ?? "");
+    setEditDescription(selectedFeed.description ?? "");
+  }, [selectedFeed]);
+
+  const saveFeedDetails = async () => {
+    if (!selectedFeed) return;
+    const titleValue = editTitle.trim();
+    const descriptionValue = editDescription.trim();
+    setSavingFeed(true);
+    try {
+      const { error: updateError } = await supabase
+        .from("feeds")
+        .update({
+          title: titleValue || null,
+          display_name: titleValue || null,
+          description: descriptionValue || null
+        })
+        .eq("id", selectedFeed.id);
+      if (updateError) throw updateError;
+      toast.success("Feed details updated");
+      await loadFeeds();
+    } catch (err: any) {
+      toast.error(err?.message ?? "Failed to update feed");
+    } finally {
+      setSavingFeed(false);
+    }
+  };
+
+  const createFeed = async () => {
+    const slug = normalizeSlug(createSlug);
+    if (!slug || !/^[a-z0-9-]+$/.test(slug)) {
+      toast.error("Provide a slug using letters, numbers, or dashes.");
+      return;
+    }
+    if (feeds.some((feed) => feed.slug === slug)) {
+      toast.error("That slug already exists.");
+      return;
+    }
+    const titleValue = createTitle.trim();
+    const descriptionValue = createDescription.trim();
+    setCreatingFeed(true);
+    try {
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
+      const userId = userData.user?.id;
+      if (!userId) throw new Error("Missing user session");
+
+      const { data: insertRow, error: insertError } = await supabase
+        .from("feeds")
+        .insert({
+          user_id: userId,
+          slug,
+          title: titleValue || null,
+          display_name: titleValue || null,
+          description: descriptionValue || null,
+          is_enabled: true
+        })
+        .select("id,slug")
+        .single();
+      if (insertError) throw insertError;
+
+      toast.success("Feed created");
+      setCreateSlug("");
+      setCreateTitle("");
+      setCreateDescription("");
+      await loadFeeds();
+      if (insertRow?.id) {
+        setSelectedFeedId(insertRow.id);
+        setTestSlug(insertRow.slug);
+      }
+    } catch (err: any) {
+      toast.error(err?.message ?? "Failed to create feed");
+    } finally {
+      setCreatingFeed(false);
+    }
+  };
+
   if (loading) return <LoadingState label="Loading feeds" />;
   if (error) return <ErrorState title="Feeds unavailable" subtitle={error} onRetry={loadFeeds} />;
 
@@ -477,6 +574,84 @@ export default function FeedsPage() {
             </div>
           </>
         )}
+      </Card>
+
+      <Card>
+        <div className="text-sm font-semibold uppercase tracking-wide text-black/50">Feed details</div>
+        <div className="mt-2 text-xs text-black/50">
+          {selectedFeed ? `Editing ${selectedFeed.slug}` : "Select a feed to edit details."}
+        </div>
+        <div className="mt-4 grid gap-3">
+          <div>
+            <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Feed name</label>
+            <Input
+              placeholder="BA6 - Systems Notes"
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              disabled={!selectedFeed}
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Description</label>
+            <Input
+              placeholder="Optional description"
+              value={editDescription}
+              onChange={(e) => setEditDescription(e.target.value)}
+              disabled={!selectedFeed}
+            />
+          </div>
+          {selectedFeed && (
+            <div className="text-xs text-black/50">Slug: /{selectedFeed.slug}</div>
+          )}
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button
+              size="sm"
+              onClick={saveFeedDetails}
+              disabled={!selectedFeed || savingFeed}
+              className="w-full sm:w-auto"
+            >
+              {savingFeed ? "Saving..." : "Save feed details"}
+            </Button>
+          </div>
+        </div>
+
+        <details className="mt-6">
+          <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-black/50">
+            Create a new feed
+          </summary>
+          <div className="mt-3 grid gap-3">
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Slug</label>
+              <Input
+                placeholder="e.g. market-notes"
+                value={createSlug}
+                onChange={(e) => setCreateSlug(e.target.value)}
+              />
+              <div className="mt-1 text-[11px] text-black/40">
+                Letters, numbers, and dashes only. This becomes the feed URL.
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Feed name (optional)</label>
+              <Input
+                placeholder="BA6 - Market Notes"
+                value={createTitle}
+                onChange={(e) => setCreateTitle(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Description (optional)</label>
+              <Input
+                placeholder="Short summary"
+                value={createDescription}
+                onChange={(e) => setCreateDescription(e.target.value)}
+              />
+            </div>
+            <Button size="sm" onClick={createFeed} disabled={creatingFeed} className="w-full sm:w-auto">
+              {creatingFeed ? "Creating..." : "Create feed"}
+            </Button>
+          </div>
+        </details>
       </Card>
 
       <div className="grid gap-6 lg:grid-cols-2">
