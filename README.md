@@ -119,7 +119,13 @@ You can also use env vars: `BSKY_USER_ID`, `BSKY_HANDLE`, `BSKY_APP_PASSWORD`, a
 
 ## Indexing note
 
-The worker inserts successful posts into `indexed_posts` so feeds work immediately for scheduled posts. You can replace this with a fuller indexer later.
+The worker inserts successful posts into `indexed_posts` so feeds work immediately for scheduled posts. It also includes a lightweight indexer loop to pull recent posts for feed sources so manual posts show up too.
+
+Indexer env vars (worker):
+- `INDEXER_ENABLED` (default `true`)
+- `INDEXER_INTERVAL_MS` (default `120000`)
+- `INDEXER_COOLDOWN_MS` (default equals interval)
+- `INDEXER_LIMIT` (default `50`)
 
 ## Seed example (run once)
 

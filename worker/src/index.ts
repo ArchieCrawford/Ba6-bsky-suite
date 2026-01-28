@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { supa } from "./supa.js";
 import { agentFor } from "./bsky.js";
 import { processAiImageJobs } from "./aiImages.js";
+import { startIndexer } from "./indexer.js";
 
 const POLL_MS = Number(process.env.WORKER_POLL_MS ?? "5000");
 const LOCK_SECONDS = Number(process.env.WORKER_LOCK_SECONDS ?? "45");
@@ -314,6 +315,7 @@ async function loopOnce(): Promise<{ scheduled: number; ai: number }> {
 
 async function main() {
   log("info", "worker_start", { worker_id: WORKER_ID, poll_ms: POLL_MS, lock_seconds: LOCK_SECONDS });
+  startIndexer(log);
   for (;;) {
     try {
       const counts = await loopOnce();

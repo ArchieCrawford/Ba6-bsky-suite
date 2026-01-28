@@ -162,6 +162,32 @@ export async function POST(request: Request) {
     const input = (await request.json().catch(() => ({}))) as PublishRequest;
     const feed = await fetchFeed(supa, input, data.user.id);
     const account = await fetchAccount(supa, data.user.id, input.accountDid, input.handle);
+
+    const { error: deleteError } = await supa
+      .from("feed_sources")
+      .delete()
+      .eq("feed_id", feed.id)
+      .or("account_did.eq.did:plc:REPLACE_ME,account_did.ilike.%REPLACE_ME%");
+    if (deleteError) throw deleteError;
+
+    const { data: sources, error: sourcesError } = await supa
+      .from("feed_sources")
+      .select("id,account_did")
+      .eq("feed_id", feed.id)
+      .eq("source_type", "account_list")
+      .not("account_did", "is", null)
+      .not("account_did", "ilike", "%REPLACE_ME%");
+    if (sourcesError) throw sourcesError;
+
+    if (!sources || sources.length === 0) {
+      const { error: insertError } = await supa.from("feed_sources").insert({
+        feed_id: feed.id,
+        source_type: "account_list",
+        account_did: account.account_did
+      });
+      if (insertError) throw insertError;
+    }
+
     const agent = await loginAgent(supa, account);
 
     let existingRecord: any = null;

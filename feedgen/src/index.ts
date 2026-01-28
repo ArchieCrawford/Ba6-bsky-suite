@@ -205,7 +205,12 @@ app.get("/xrpc/app.bsky.feed.getFeedSkeleton", async (req: Request, res: Respons
     const sources = await getFeedSources(cfg.id);
     const authorDids = sources
       .filter((s) => s.source_type === "account_list" && s.account_did)
-      .map((s) => s.account_did!) as string[];
+      .map((s) => String(s.account_did ?? "").trim())
+      .filter((did) => did && !did.toUpperCase().includes("REPLACE_ME"));
+
+    if (authorDids.length === 0) {
+      return res.json({ feed: [], cursor: undefined });
+    }
 
     const posts = await queryPosts({
       authorDids,
