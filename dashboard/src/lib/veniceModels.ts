@@ -40,7 +40,13 @@ function normalizeTokens(value: unknown): string[] {
 }
 
 function collectTypeHints(model: VeniceModel): string[] {
+  const id = model.id ?? "";
+  const name = typeof model.name === "string" ? model.name : "";
+  const description = typeof model.description === "string" ? model.description : "";
   const hints = [
+    id,
+    name,
+    description,
     model.type,
     (model as any).model_type,
     (model as any).modality,
@@ -49,7 +55,20 @@ function collectTypeHints(model: VeniceModel): string[] {
     (model as any).model_spec?.modalities,
     (model as any).modalities,
     (model as any).capabilities,
-    (model as any).model_spec?.capabilities
+    (model as any).model_spec?.capabilities,
+    (model as any).tags,
+    (model as any).categories,
+    (model as any).category,
+    (model as any).use_case,
+    (model as any).input_type,
+    (model as any).output_type,
+    (model as any).model_spec?.input,
+    (model as any).model_spec?.output,
+    (model as any).model_spec?.input_type,
+    (model as any).model_spec?.output_type,
+    (model as any).model_spec?.family,
+    (model as any).model_spec?.name,
+    (model as any).model_spec?.description
   ].flatMap((value) => normalizeTokens(value));
 
   if ((model as any).supportsVision || (model as any).model_spec?.supportsVision) {
@@ -65,17 +84,54 @@ function collectTypeHints(model: VeniceModel): string[] {
 function matchesType(model: VeniceModel, type: VeniceModelType): boolean {
   const hints = collectTypeHints(model);
   if (hints.length === 0) return false;
-  const hasImage = hints.some(
-    (hint) => hint.includes("image") || hint.includes("vision") || hint.includes("diffusion")
-  );
-  const hasText = hints.some(
-    (hint) =>
-      hint.includes("text") ||
-      hint.includes("chat") ||
-      hint.includes("llm") ||
-      hint.includes("language") ||
-      hint.includes("completion")
-  );
+  const imageKeywords = [
+    "image",
+    "img",
+    "vision",
+    "diffusion",
+    "sdxl",
+    "stable",
+    "flux",
+    "schnell",
+    "turbo",
+    "photo",
+    "photography",
+    "photoreal",
+    "illustration",
+    "anime",
+    "art",
+    "render",
+    "sketch",
+    "visual",
+    "portrait",
+    "painting"
+  ];
+  const textKeywords = [
+    "text",
+    "chat",
+    "llm",
+    "language",
+    "completion",
+    "instruct",
+    "assistant",
+    "gpt",
+    "llama",
+    "mistral",
+    "mixtral",
+    "qwen",
+    "gemma",
+    "claude",
+    "command",
+    "cohere",
+    "reason",
+    "summarize",
+    "summarization",
+    "nlp",
+    "dialog"
+  ];
+
+  const hasImage = hints.some((hint) => imageKeywords.some((key) => hint.includes(key)));
+  const hasText = hints.some((hint) => textKeywords.some((key) => hint.includes(key)));
   const isMultimodal = hints.some((hint) => hint.includes("multimodal"));
 
   if (type === "image") return hasImage || isMultimodal;
