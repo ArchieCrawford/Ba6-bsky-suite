@@ -1,0 +1,95 @@
+:root {
+  color-scheme: light dark;
+  --ba6-bg: #f6f3ee;
+  --ba6-text: #1f1f1f;
+  --ba6-muted: #5b5b5b;
+  --ba6-border: rgba(0, 0, 0, 0.08);
+  --ba6-pill: #ffeaa7;
+  --ba6-pill-text: #3d2f00;
+}
+
+html {
+  background: var(--ba6-bg);
+}
+
+body {
+  font-family: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  color: var(--ba6-text);
+}
+
+.nx-container {
+  max-width: 1200px;
+}
+
+.ba6-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 600;
+}
+
+.ba6-brand {
+  font-size: 0.95rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.ba6-title {
+  font-size: 0.9rem;
+  color: var(--ba6-muted);
+}
+
+.ba6-pill {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: var(--ba6-pill);
+  color: var(--ba6-pill-text);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.ba6-nav {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  font-size: 0.85rem;
+}
+
+.ba6-nav-link {
+  color: var(--ba6-muted);
+  text-decoration: none;
+}
+
+.ba6-nav-link:hover {
+  color: var(--ba6-text);
+}
+
+.nx-sidebar {
+  border-right: 1px solid var(--ba6-border);
+}
+
+.nx-navbar {
+  border-bottom: 1px solid var(--ba6-border);
+  backdrop-filter: blur(8px);
+}
+
+.nx-footer {
+  border-top: 1px solid var(--ba6-border);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ba6-bg: #121212;
+    --ba6-text: #f2f2f2;
+    --ba6-muted: #c0c0c0;
+    --ba6-border: rgba(255, 255, 255, 0.08);
+    --ba6-pill: #2d2d2d;
+    --ba6-pill-text: #ffeaa7;
+  }
+
+  html {
+    background: var(--ba6-bg);
+  }
+}
