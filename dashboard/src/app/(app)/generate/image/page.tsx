@@ -104,6 +104,8 @@ export default function GenerateImagePage() {
   const [label, setLabel] = useState("");
   const [modelId, setModelId] = useState("");
   const [size, setSize] = useState(SIZE_OPTIONS[0].value);
+  const [steps, setSteps] = useState("");
+  const [cfgScale, setCfgScale] = useState("");
   const [selectedAsset, setSelectedAsset] = useState<AiAsset | null>(null);
   const [lightboxLoading, setLightboxLoading] = useState(false);
 
@@ -256,9 +258,28 @@ export default function GenerateImagePage() {
       return;
     }
 
+    const parsedSteps = steps.trim() ? Number(steps) : undefined;
+    if (parsedSteps !== undefined) {
+      if (!Number.isFinite(parsedSteps) || parsedSteps < 1 || parsedSteps > 60) {
+        toast.error("Steps must be a number between 1 and 60.");
+        return;
+      }
+    }
+    const parsedCfg = cfgScale.trim() ? Number(cfgScale) : undefined;
+    if (parsedCfg !== undefined) {
+      if (!Number.isFinite(parsedCfg) || parsedCfg <= 0 || parsedCfg > 20) {
+        toast.error("Quality (CFG scale) must be between 0.1 and 20.");
+        return;
+      }
+    }
+
     setCreating(true);
     try {
       const headers = await getAuthHeaders();
+      const params: Record<string, unknown> = {
+        ...(parsedSteps !== undefined ? { steps: Math.round(parsedSteps) } : {}),
+        ...(parsedCfg !== undefined ? { cfg_scale: parsedCfg } : {})
+      };
       const res = await fetch("/api/ai/image/jobs", {
         method: "POST",
         headers: {
@@ -270,7 +291,8 @@ export default function GenerateImagePage() {
           prompt: prompt.trim(),
           negativePrompt: negativePrompt.trim() || undefined,
           model: modelId,
-          size
+          size,
+          params: Object.keys(params).length ? params : undefined
         })
       });
       const payload = await res.json().catch(() => ({}));
@@ -376,6 +398,34 @@ export default function GenerateImagePage() {
                 </option>
               ))}
             </Select>
+            </div>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Steps (optional)</label>
+              <Input
+                type="number"
+                min={1}
+                max={60}
+                step={1}
+                placeholder="e.g. 30 (leave blank for default)"
+                value={steps}
+                onChange={(e) => setSteps(e.target.value)}
+              />
+              <div className="mt-1 text-[11px] text-black/40">Leave blank for defaults. Higher steps can improve detail but take longer.</div>
+            </div>
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Quality (CFG scale)</label>
+              <Input
+                type="number"
+                min={0.1}
+                max={20}
+                step={0.1}
+                placeholder="e.g. 7.5"
+                value={cfgScale}
+                onChange={(e) => setCfgScale(e.target.value)}
+              />
+              <div className="mt-1 text-[11px] text-black/40">Higher values follow the prompt more closely.</div>
             </div>
           </div>
           <Button

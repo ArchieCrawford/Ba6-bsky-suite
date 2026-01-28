@@ -87,7 +87,7 @@ async function fetchImage(job: AiJob): Promise<ImageResult> {
     throw new Error("Missing VENICE_API_KEY");
   }
   const params = (job.params ?? {}) as Record<string, unknown>;
-  const { size, width: paramWidth, height: paramHeight, ...rest } = params as Record<string, any>;
+  const { size, width: paramWidth, height: paramHeight, label, ...rest } = params as Record<string, any>;
   let width = typeof paramWidth === "number" ? paramWidth : undefined;
   let height = typeof paramHeight === "number" ? paramHeight : undefined;
   if (!width || !height) {
