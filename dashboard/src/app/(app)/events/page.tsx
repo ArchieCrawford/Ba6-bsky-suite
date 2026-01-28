@@ -5,6 +5,7 @@ import { format } from "date-fns";
 import { supabase } from "@/lib/supabaseClient";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
+import { Textarea } from "@/components/ui/Textarea";
 import { Button } from "@/components/ui/Button";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/States";
 import { toast } from "sonner";
@@ -36,6 +37,26 @@ export default function EventsPage() {
   const [eventType, setEventType] = useState("all");
   const [search, setSearch] = useState("");
   const [sortDir, setSortDir] = useState<"desc" | "asc">("desc");
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportTitle, setReportTitle] = useState("");
+  const [reportDescription, setReportDescription] = useState("");
+
+  const submitReport = () => {
+    const title = reportTitle.trim();
+    const description = reportDescription.trim();
+    if (!title && !description) {
+      toast.error("Add a short error summary or description.");
+      return;
+    }
+    const subject = encodeURIComponent("BA6 Bug Report");
+    const body = encodeURIComponent(
+      `Summary:\\n${title || "(not provided)"}\\n\\nDescription:\\n${description || "(not provided)"}\\n\\nPage: ${typeof window !== "undefined" ? window.location.href : "Events"}\\nTime: ${new Date().toISOString()}\\n`
+    );
+    window.location.href = `mailto:archie@ba6-bsky-suite.com?subject=${subject}&body=${body}`;
+    setReportOpen(false);
+    setReportTitle("");
+    setReportDescription("");
+  };
 
   const loadEvents = async () => {
     setLoading(true);
@@ -91,9 +112,14 @@ export default function EventsPage() {
             <div className="text-xs uppercase tracking-[0.3em] text-black/40">Events</div>
             <div className="text-sm text-black/60">Audit trail for worker activity.</div>
           </div>
-          <Button variant="ghost" size="sm" onClick={loadEvents} className="w-auto sm:hidden">
-            Refresh
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" size="sm" onClick={() => setReportOpen(true)} className="w-auto">
+              Report issue
+            </Button>
+            <Button variant="ghost" size="sm" onClick={loadEvents} className="w-auto sm:hidden">
+              Refresh
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -157,6 +183,54 @@ export default function EventsPage() {
             );
           })}
         </Card>
+      )}
+
+      {reportOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setReportOpen(false)} />
+          <div className="relative mx-4 w-full max-w-lg rounded-2xl bg-white p-4 shadow-soft">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-xs uppercase tracking-[0.3em] text-black/40">Support</div>
+                <div className="text-lg font-semibold text-ink">Submit an error or bug</div>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setReportOpen(false)}>
+                Close
+              </Button>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Error summary</label>
+                <Input
+                  placeholder="Short title (e.g., Invalid schema: vault)"
+                  value={reportTitle}
+                  onChange={(e) => setReportTitle(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Description</label>
+                <Textarea
+                  rows={4}
+                  placeholder="What happened, what you expected, and any steps to reproduce."
+                  value={reportDescription}
+                  onChange={(e) => setReportDescription(e.target.value)}
+                />
+              </div>
+              <div className="text-xs text-black/50">
+                This opens your email client to send a report to archie@ba6-bsky-suite.com.
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                <Button variant="ghost" size="sm" onClick={() => setReportOpen(false)}>
+                  Cancel
+                </Button>
+                <Button variant="secondary" size="sm" onClick={submitReport}>
+                  Send report
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
