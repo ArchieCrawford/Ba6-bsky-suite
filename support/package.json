@@ -9,6 +9,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "ba6-bsky-suite": "file:..",
     "next": "14.2.5",
     "nextra": "2.13.2",
     "nextra-theme-docs": "2.13.2",
