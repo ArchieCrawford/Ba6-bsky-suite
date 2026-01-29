@@ -7,7 +7,11 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "platforms": ["ios", "android"],
-    "ios": { "supportsTablet": true },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.ba6.bskysuite",
+      "buildNumber": "1"
+    },
     "android": { "adaptiveIcon": { "backgroundColor": "#ffffff" } },
     "splash": {
       "image": "./assets/splash.png",
