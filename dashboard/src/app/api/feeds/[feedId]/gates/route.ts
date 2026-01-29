@@ -3,7 +3,7 @@ import { createSupabaseServerClient } from "@/lib/supabaseServer";
 
 export const runtime = "nodejs";
 
-const ALLOWED_GATES = new Set(["hashtag_opt_in", "token_gate", "manual_approval", "follow_gate"]);
+const ALLOWED_GATES = new Set(["hashtag_opt_in", "token_gate", "pay_gate", "manual_approval", "follow_gate"]);
 
 type GatePayload = {
   gateId?: string;

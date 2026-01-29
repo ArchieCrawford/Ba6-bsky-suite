@@ -11,17 +11,19 @@ type PayGateConfig = {
   currency?: string;
 };
 
-const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-
-if (!stripeSecretKey) {
-  throw new Error("Missing env: STRIPE_SECRET_KEY");
-}
-
 let stripeClient: Stripe | null = null;
+
+function requireStripeKey() {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) {
+    throw new Error("Missing env: STRIPE_SECRET_KEY");
+  }
+  return key;
+}
 
 export function getStripe(): Stripe {
   if (!stripeClient) {
-    stripeClient = new Stripe(stripeSecretKey, { apiVersion: "2024-06-20" });
+    stripeClient = new Stripe(requireStripeKey(), { apiVersion: "2024-06-20" });
   }
   return stripeClient;
 }

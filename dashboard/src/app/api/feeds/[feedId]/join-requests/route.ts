@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabaseServer";
+import { getPayGateForAction, hasEntitlement } from "@/lib/billing";
 
 export const runtime = "nodejs";
 
@@ -56,6 +57,18 @@ export async function POST(request: Request, context: { params: Promise<{ feedId
       const requesterDid = typeof body.requesterDid === "string" ? body.requesterDid.trim() : "";
       if (!requesterDid) {
         return NextResponse.json({ error: "Missing requester DID" }, { status: 400 });
+      }
+
+      const payGate = await getPayGateForAction(feedId, "join");
+      if (payGate) {
+        const lookupKey = typeof payGate.config?.lookup_key === "string" ? payGate.config.lookup_key.trim() : "";
+        if (!lookupKey) {
+          return NextResponse.json({ error: "Pay gate missing lookup key" }, { status: 400 });
+        }
+        const ok = await hasEntitlement(userData.user.id, lookupKey);
+        if (!ok) {
+          return NextResponse.json({ ok: false, reason: "payment_required" }, { status: 402 });
+        }
       }
 
       const { data: accountRow } = await supa

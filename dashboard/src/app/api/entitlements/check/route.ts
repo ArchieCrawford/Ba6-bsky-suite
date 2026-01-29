@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabaseServer";
+import { getPayGateForAction, hasEntitlement } from "@/lib/billing";
 
 export const runtime = "nodejs";
 
@@ -8,6 +9,12 @@ function getBearerToken(request: Request) {
   if (!header.startsWith("Bearer ")) return null;
   return header.slice(7);
 }
+
+type EntitlementsPayload = {
+  lookupKey?: string;
+  feedId?: string;
+  gateAction?: string;
+};
 
 export async function POST(request: Request) {
   try {
@@ -22,7 +29,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid auth token" }, { status: 401 });
     }
 
-    return NextResponse.json({ status: "unknown" });
+    const body = (await request.json().catch(() => ({}))) as EntitlementsPayload;
+    let lookupKey = typeof body.lookupKey === "string" ? body.lookupKey.trim() : "";
+
+    if (!lookupKey && body.feedId && body.gateAction) {
+      const gate = await getPayGateForAction(body.feedId, body.gateAction);
+      lookupKey = typeof gate?.config?.lookup_key === "string" ? gate.config.lookup_key.trim() : "";
+    }
+
+    if (!lookupKey) {
+      return NextResponse.json({ status: "unknown" });
+    }
+
+    const ok = await hasEntitlement(data.user.id, lookupKey);
+    return NextResponse.json({ status: ok ? "active" : "locked" });
   } catch (err: any) {
     return NextResponse.json({ error: err?.message ?? "Entitlements check failed" }, { status: 500 });
   }

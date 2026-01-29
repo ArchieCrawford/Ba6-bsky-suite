@@ -37,6 +37,16 @@ const matchesTag = (text: string, tag: string, caseInsensitive = true) => {
 
 const normalizeTag = (value: string) => value.trim().replace(/^#+/, "").replace(/\s+/g, "");
 
+const normalizeGateActions = (value: unknown) => {
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0).map((item) => item.trim());
+  }
+  if (typeof value === "string" && value.trim().length > 0) {
+    return [value.trim()];
+  }
+  return [];
+};
+
 const normalizeSlug = (value: string) =>
   value
     .trim()
@@ -104,9 +114,12 @@ type JoinRequestRow = {
   created_at: string;
 };
 
+type PayGateAction = "join" | "submit" | "create_feed" | "premium_rules";
+type GateType = "hashtag_opt_in" | "token_gate" | "pay_gate";
+
 type GateFormState = {
   id?: string | null;
-  gateType: "hashtag_opt_in" | "token_gate";
+  gateType: GateType;
   mode: "public" | "moderated";
   isEnabled: boolean;
   enrollmentTag: string;
@@ -117,11 +130,17 @@ type GateFormState = {
   tokenAddress: string;
   minBalance: string;
   gateAction: "join" | "submit" | "premium_features";
+  payPriceId: string;
+  payLookupKey: string;
+  payBillingMode: "one_time" | "subscription";
+  payGateActions: PayGateAction[];
+  payAmountDisplay: string;
+  payCurrency: string;
 };
 
 type TabKey = "basics" | "sources" | "rules" | "gating" | "publish";
 
-const defaultGateForm = (type: "hashtag_opt_in" | "token_gate" = "hashtag_opt_in"): GateFormState => ({
+const defaultGateForm = (type: GateType = "hashtag_opt_in"): GateFormState => ({
   gateType: type,
   mode: "public",
   isEnabled: true,
@@ -132,7 +151,13 @@ const defaultGateForm = (type: "hashtag_opt_in" | "token_gate" = "hashtag_opt_in
   tokenChain: "base",
   tokenAddress: "",
   minBalance: "1",
-  gateAction: "join"
+  gateAction: "join",
+  payPriceId: "",
+  payLookupKey: "",
+  payBillingMode: "one_time",
+  payGateActions: ["join"],
+  payAmountDisplay: "",
+  payCurrency: ""
 });
 
 export default function FeedsPage() {
@@ -164,6 +189,8 @@ export default function FeedsPage() {
   const [gateForm, setGateForm] = useState<GateFormState | null>(null);
   const [savingGate, setSavingGate] = useState(false);
   const [loadingGates, setLoadingGates] = useState(false);
+  const [entitlementStatus, setEntitlementStatus] = useState<Record<string, "active" | "locked" | "unknown">>({});
+  const [unlockingGateId, setUnlockingGateId] = useState<string | null>(null);
 
   const [testSlug, setTestSlug] = useState("");
   const [testResults, setTestResults] = useState<TestRow[]>([]);
@@ -421,20 +448,47 @@ export default function FeedsPage() {
     if (!selectedFeedId || !gateForm) return;
     setSavingGate(true);
     try {
-      const config =
-        gateForm.gateType === "hashtag_opt_in"
-          ? {
-              enrollment_tag: normalizeTag(gateForm.enrollmentTag),
-              submission_tag: normalizeTag(gateForm.submissionTag),
-              require_mention: gateForm.requireMention,
-              join_account: gateForm.joinAccount.trim() || null
-            }
-          : {
-              chain: gateForm.tokenChain,
-              token: gateForm.tokenAddress.trim(),
-              min_balance: Number(gateForm.minBalance || "1"),
-              action: gateForm.gateAction
-            };
+      let config: Record<string, unknown> = {};
+
+      if (gateForm.gateType === "hashtag_opt_in") {
+        config = {
+          enrollment_tag: normalizeTag(gateForm.enrollmentTag),
+          submission_tag: normalizeTag(gateForm.submissionTag),
+          require_mention: gateForm.requireMention,
+          join_account: gateForm.joinAccount.trim() || null
+        };
+      } else if (gateForm.gateType === "token_gate") {
+        config = {
+          chain: gateForm.tokenChain,
+          token: gateForm.tokenAddress.trim(),
+          min_balance: Number(gateForm.minBalance || "1"),
+          action: gateForm.gateAction
+        };
+      } else {
+        const priceId = gateForm.payPriceId.trim();
+        const lookupKey = gateForm.payLookupKey.trim();
+        const actions = gateForm.payGateActions.length ? gateForm.payGateActions : ["join"];
+
+        if (!priceId || !lookupKey) {
+          toast.error("Price ID and lookup key are required for pay gates");
+          setSavingGate(false);
+          return;
+        }
+
+        config = {
+          provider: "stripe",
+          gate_actions: actions,
+          price_id: priceId,
+          lookup_key: lookupKey,
+          billing_mode: gateForm.payBillingMode,
+          ...(gateForm.payAmountDisplay.trim()
+            ? { amount_display: gateForm.payAmountDisplay.trim() }
+            : {}),
+          ...(gateForm.payCurrency.trim()
+            ? { currency: gateForm.payCurrency.trim().toLowerCase() }
+            : {})
+        };
+      }
 
       const res = await withAuthFetch(`/api/feeds/${selectedFeedId}/gates`, {
         method: "POST",
@@ -477,6 +531,30 @@ export default function FeedsPage() {
       await loadGates(selectedFeedId);
     } catch (err: any) {
       toast.error(err?.message ?? "Failed to delete gate");
+    }
+  };
+
+  const startCheckout = async (gate: GateRow) => {
+    const actions = normalizeGateActions(gate.config?.gate_actions);
+    const gateAction = actions[0] ?? "join";
+    setUnlockingGateId(gate.id);
+    try {
+      const res = await withAuthFetch("/api/billing/checkout", {
+        method: "POST",
+        body: JSON.stringify({ feed_id: gate.feed_id, gate_action: gateAction })
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(payload?.error ?? "Unable to start checkout");
+      }
+      if (!payload?.url) {
+        throw new Error("Checkout URL missing");
+      }
+      window.location.href = payload.url;
+    } catch (err: any) {
+      toast.error(err?.message ?? "Checkout failed");
+    } finally {
+      setUnlockingGateId(null);
     }
   };
 
@@ -804,6 +882,47 @@ export default function FeedsPage() {
   useEffect(() => {
     if (!gateForm && gates.length) return;
   }, [gateForm, gates]);
+
+  useEffect(() => {
+    const lookupKeys = gates
+      .filter((gate) => gate.gate_type === "pay_gate")
+      .map((gate) => (typeof gate.config?.lookup_key === "string" ? gate.config.lookup_key.trim() : ""))
+      .filter(Boolean);
+
+    if (!lookupKeys.length) {
+      setEntitlementStatus({});
+      return;
+    }
+
+    let cancelled = false;
+    const run = async () => {
+      const next: Record<string, "active" | "locked" | "unknown"> = {};
+      for (const lookupKey of lookupKeys) {
+        try {
+          const res = await withAuthFetch("/api/entitlements/check", {
+            method: "POST",
+            body: JSON.stringify({ lookupKey })
+          });
+          const payload = await res.json().catch(() => ({}));
+          if (res.ok && (payload.status === "active" || payload.status === "locked")) {
+            next[lookupKey] = payload.status;
+          } else {
+            next[lookupKey] = "unknown";
+          }
+        } catch {
+          next[lookupKey] = "unknown";
+        }
+      }
+      if (!cancelled) {
+        setEntitlementStatus(next);
+      }
+    };
+    run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [gates]);
 
   if (loading) return <LoadingState label="Loading feeds" />;
   if (error) return <ErrorState title="Feeds unavailable" subtitle={error} onRetry={loadFeeds} />;
@@ -1214,63 +1333,124 @@ export default function FeedsPage() {
                   <div className="mt-4 text-xs text-black/50">No gates yet. Add a gate to enable joins or submissions.</div>
                 ) : (
                   <div className="mt-4 space-y-3">
-                    {gates.map((gate) => (
-                      <div key={gate.id} className="rounded-xl border border-black/10 bg-white/70 px-4 py-3">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <div>
-                            <div className="text-sm font-semibold text-ink">{gate.gate_type.replace(/_/g, " ")}</div>
-                            <div className="text-xs text-black/50">
-                              {gate.mode ?? "public"} · {gate.is_enabled ? "Enabled" : "Disabled"}
+                    {gates.map((gate) => {
+                      const config = gate.config ?? {};
+                      const isPayGate = gate.gate_type === "pay_gate";
+                      const lookupKey = isPayGate && typeof config.lookup_key === "string" ? config.lookup_key.trim() : "";
+                      const actions = isPayGate ? normalizeGateActions(config.gate_actions) : [];
+                      const entitlement = lookupKey ? entitlementStatus[lookupKey] ?? "unknown" : "unknown";
+                      const statusLabel =
+                        entitlement === "active" ? "Active entitlement ✅" : entitlement === "locked" ? "Locked 🔒" : "Entitlement unknown";
+
+                      return (
+                        <div key={gate.id} className="rounded-xl border border-black/10 bg-white/70 px-4 py-3">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                              <div className="text-sm font-semibold text-ink">{gate.gate_type.replace(/_/g, " ")}</div>
+                              <div className="text-xs text-black/50">
+                                {isPayGate ? "Stripe" : gate.mode ?? "public"} · {gate.is_enabled ? "Enabled" : "Disabled"}
+                              </div>
+                              {isPayGate && (
+                                <div className="mt-1 text-xs text-black/50">
+                                  {lookupKey ? `Lookup key: ${lookupKey}` : "Missing lookup key"}
+                                  {actions.length ? ` · Actions: ${actions.join(", ")}` : ""}
+                                  <span className="ml-2">{statusLabel}</span>
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex gap-2">
+                              {isPayGate && (
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  disabled={unlockingGateId === gate.id}
+                                  onClick={() => startCheckout(gate)}
+                                >
+                                  {unlockingGateId === gate.id ? "Unlocking..." : "Unlock"}
+                                </Button>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => {
+                                  const config = gate.config ?? {};
+                                  if (gate.gate_type === "hashtag_opt_in") {
+                                    setGateForm({
+                                      id: gate.id,
+                                      gateType: "hashtag_opt_in",
+                                      mode: (gate.mode ?? "public") as "public" | "moderated",
+                                      isEnabled: gate.is_enabled,
+                                      enrollmentTag: config.enrollment_tag ?? "",
+                                      submissionTag: config.submission_tag ?? "",
+                                      requireMention: Boolean(config.require_mention),
+                                      joinAccount: config.join_account ?? "",
+                                      tokenChain: "base",
+                                      tokenAddress: "",
+                                      minBalance: "1",
+                                      gateAction: "join",
+                                      payPriceId: "",
+                                      payLookupKey: "",
+                                      payBillingMode: "one_time",
+                                      payGateActions: ["join"],
+                                      payAmountDisplay: "",
+                                      payCurrency: ""
+                                    });
+                                  } else if (gate.gate_type === "pay_gate") {
+                                    const actions = normalizeGateActions(config.gate_actions) as PayGateAction[];
+                                    setGateForm({
+                                      id: gate.id,
+                                      gateType: "pay_gate",
+                                      mode: "public",
+                                      isEnabled: gate.is_enabled,
+                                      enrollmentTag: "",
+                                      submissionTag: "",
+                                      requireMention: false,
+                                      joinAccount: "",
+                                      tokenChain: "base",
+                                      tokenAddress: "",
+                                      minBalance: "1",
+                                      gateAction: "join",
+                                      payPriceId: config.price_id ?? "",
+                                      payLookupKey: config.lookup_key ?? "",
+                                      payBillingMode: (config.billing_mode ?? "one_time") as "one_time" | "subscription",
+                                      payGateActions: actions.length ? actions : ["join"],
+                                      payAmountDisplay: config.amount_display ?? "",
+                                      payCurrency: config.currency ?? ""
+                                    });
+                                  } else {
+                                    setGateForm({
+                                      id: gate.id,
+                                      gateType: "token_gate",
+                                      mode: "public",
+                                      isEnabled: gate.is_enabled,
+                                      enrollmentTag: "",
+                                      submissionTag: "",
+                                      requireMention: false,
+                                      joinAccount: "",
+                                      tokenChain: config.chain ?? "base",
+                                      tokenAddress: config.token ?? "",
+                                      minBalance: String(config.min_balance ?? "1"),
+                                      gateAction: config.action ?? "join",
+                                      payPriceId: "",
+                                      payLookupKey: "",
+                                      payBillingMode: "one_time",
+                                      payGateActions: ["join"],
+                                      payAmountDisplay: "",
+                                      payCurrency: ""
+                                    });
+                                  }
+                                }}
+                              >
+                                Edit
+                              </Button>
+                              <Button size="sm" variant="ghost" onClick={() => deleteGate(gate.id)}>
+                                Remove
+                              </Button>
                             </div>
                           </div>
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onClick={() => {
-                                const config = gate.config ?? {};
-                                if (gate.gate_type === "hashtag_opt_in") {
-                                  setGateForm({
-                                    id: gate.id,
-                                    gateType: "hashtag_opt_in",
-                                    mode: (gate.mode ?? "public") as "public" | "moderated",
-                                    isEnabled: gate.is_enabled,
-                                    enrollmentTag: config.enrollment_tag ?? "",
-                                    submissionTag: config.submission_tag ?? "",
-                                    requireMention: Boolean(config.require_mention),
-                                    joinAccount: config.join_account ?? "",
-                                    tokenChain: "base",
-                                    tokenAddress: "",
-                                    minBalance: "1",
-                                    gateAction: "join"
-                                  });
-                                } else {
-                                  setGateForm({
-                                    id: gate.id,
-                                    gateType: "token_gate",
-                                    mode: "public",
-                                    isEnabled: gate.is_enabled,
-                                    enrollmentTag: "",
-                                    submissionTag: "",
-                                    requireMention: false,
-                                    joinAccount: "",
-                                    tokenChain: config.chain ?? "base",
-                                    tokenAddress: config.token ?? "",
-                                    minBalance: String(config.min_balance ?? "1"),
-                                    gateAction: config.action ?? "join"
-                                  });
-                                }
-                              }}
-                            >
-                              Edit
-                            </Button>
-                            <Button size="sm" variant="ghost" onClick={() => deleteGate(gate.id)}>
-                              Remove
-                            </Button>
-                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </Card>
@@ -1288,6 +1468,7 @@ export default function FeedsPage() {
                       >
                         <option value="hashtag_opt_in">Hashtag opt-in</option>
                         <option value="token_gate">Token gate</option>
+                        <option value="pay_gate">Pay gate</option>
                       </Select>
                     </div>
 
@@ -1353,6 +1534,86 @@ export default function FeedsPage() {
                         </div>
                         <div className="rounded-lg border border-black/10 bg-white/80 p-3 text-xs text-black/60">
                           {gateSubmitPreview}
+                        </div>
+                      </div>
+                    ) : gateForm.gateType === "pay_gate" ? (
+                      <div className="grid gap-3">
+                        <div>
+                          <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Billing mode</label>
+                          <Select
+                            value={gateForm.payBillingMode}
+                            onChange={(e) =>
+                              setGateForm({
+                                ...gateForm,
+                                payBillingMode: e.target.value as GateFormState["payBillingMode"]
+                              })
+                            }
+                            className="min-h-[44px]"
+                          >
+                            <option value="one_time">One-time</option>
+                            <option value="subscription">Subscription</option>
+                          </Select>
+                        </div>
+                        <div>
+                          <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Stripe price ID</label>
+                          <Input
+                            placeholder="price_..."
+                            value={gateForm.payPriceId}
+                            onChange={(e) => setGateForm({ ...gateForm, payPriceId: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Entitlement lookup key</label>
+                          <Input
+                            placeholder="feed_join_basic"
+                            value={gateForm.payLookupKey}
+                            onChange={(e) => setGateForm({ ...gateForm, payLookupKey: e.target.value })}
+                          />
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div>
+                            <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Amount label (optional)</label>
+                            <Input
+                              placeholder="$9 / month"
+                              value={gateForm.payAmountDisplay}
+                              onChange={(e) => setGateForm({ ...gateForm, payAmountDisplay: e.target.value })}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Currency (optional)</label>
+                            <Input
+                              placeholder="USD"
+                              value={gateForm.payCurrency}
+                              onChange={(e) => setGateForm({ ...gateForm, payCurrency: e.target.value })}
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Gate actions</label>
+                          <div className="mt-2 grid gap-2 text-xs text-black/60 sm:grid-cols-2">
+                            {(["join", "submit", "create_feed", "premium_rules"] as PayGateAction[]).map((action) => (
+                              <label key={action} className="inline-flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={gateForm.payGateActions.includes(action)}
+                                  onChange={(e) => {
+                                    const next = new Set(gateForm.payGateActions);
+                                    if (e.target.checked) {
+                                      next.add(action);
+                                    } else {
+                                      next.delete(action);
+                                    }
+                                    setGateForm({ ...gateForm, payGateActions: Array.from(next) });
+                                  }}
+                                  className="h-4 w-4"
+                                />
+                                {action.replace(/_/g, " ")}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="rounded-lg border border-black/10 bg-white/80 p-3 text-xs text-black/60">
+                          Pay gates control BA6 actions (join, submit, premium rules). They do not restrict feed viewing in Bluesky.
                         </div>
                       </div>
                     ) : (
