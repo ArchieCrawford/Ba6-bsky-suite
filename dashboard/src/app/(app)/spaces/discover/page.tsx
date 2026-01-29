@@ -2,11 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { withAuthFetch } from "@/lib/withAuthFetch";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/States";
+import { toast } from "sonner";
 
 type SpaceRow = {
   id: string;
@@ -22,6 +25,9 @@ export default function SpacesDiscoverPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [joiningId, setJoiningId] = useState<string | null>(null);
+  const [joinedIds, setJoinedIds] = useState<Set<string>>(new Set());
+  const router = useRouter();
 
   const loadSpaces = async () => {
     try {
@@ -106,10 +112,46 @@ export default function SpacesDiscoverPage() {
               {space.description ? (
                 <p className="text-sm text-muted-foreground">{space.description}</p>
               ) : null}
-              <div className="pt-2">
+              <div className="flex flex-wrap gap-2 pt-2">
                 <Link href={`/spaces/${space.id}/chat`}>
                   <Button variant="secondary">Open space</Button>
                 </Link>
+                <Button
+                  variant="ghost"
+                  disabled={joiningId === space.id || joinedIds.has(space.id)}
+                  onClick={async () => {
+                    setJoiningId(space.id);
+                    try {
+                      const res = await withAuthFetch("/api/spaces/join", {
+                        method: "POST",
+                        body: JSON.stringify({ space_id: space.id })
+                      });
+                      const payload = await res.json().catch(() => ({}));
+                      if (!res.ok) {
+                        throw new Error(payload?.error ?? payload?.reason ?? "Unable to join");
+                      }
+                      toast.success(payload?.pending ? "Join request submitted" : "Joined space");
+                      setJoinedIds((prev) => new Set(prev).add(space.id));
+                    } catch (err: any) {
+                      if (String(err?.message ?? "").includes("Missing session")) {
+                        toast.message("Sign in to join spaces");
+                        router.push("/login");
+                      } else {
+                        toast.error(err?.message ?? "Join failed");
+                      }
+                    } finally {
+                      setJoiningId(null);
+                    }
+                  }}
+                >
+                  {joinedIds.has(space.id)
+                    ? "Joined"
+                    : joiningId === space.id
+                      ? "Joining..."
+                      : space.join_mode === "moderated"
+                        ? "Request to join"
+                        : "Join"}
+                </Button>
               </div>
             </Card>
           ))}
