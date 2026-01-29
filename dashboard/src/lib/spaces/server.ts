@@ -17,7 +17,8 @@ export async function getAuthedSupabase(request: Request) {
   const supa = createSupabaseServerClient(token);
   const { data, error } = await supa.auth.getUser();
   if (error || !data.user) return { error: "Invalid auth token" as const };
-  return { supa, user: data.user };
+  const { data: identity } = await supa.rpc("ensure_identity", { p_user_id: data.user.id }).single();
+  return { supa, user: data.user, identity };
 }
 
 export async function getSpaceMembership(

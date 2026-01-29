@@ -68,7 +68,7 @@ export function SpaceShell({ spaceId, active, children }: SpaceShellProps) {
   if (loading) {
     return (
       <Card>
-        <LoadingState title="Loading space..." />
+        <LoadingState label="Loading space..." />
       </Card>
     );
   }
@@ -76,7 +76,7 @@ export function SpaceShell({ spaceId, active, children }: SpaceShellProps) {
   if (error || !space) {
     return (
       <Card>
-        <ErrorState title="Space unavailable" description={error ?? "Space not found"} />
+        <ErrorState title="Space unavailable" subtitle={error ?? "Space not found"} />
       </Card>
     );
   }

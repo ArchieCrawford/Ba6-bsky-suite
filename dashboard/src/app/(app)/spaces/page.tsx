@@ -186,17 +186,17 @@ export default function SpacesPage() {
 
       {loading ? (
         <Card>
-          <LoadingState title="Loading spaces..." />
+          <LoadingState label="Loading spaces..." />
         </Card>
       ) : error ? (
         <Card>
-          <ErrorState title="Spaces unavailable" description={error} />
+          <ErrorState title="Spaces unavailable" subtitle={error} />
         </Card>
       ) : spaces.length === 0 ? (
         <Card>
           <EmptyState
             title="No spaces yet"
-            description="Create your first space to start messaging, threads, and digest workflows."
+            subtitle="Create your first space to start messaging, threads, and digest workflows."
           />
         </Card>
       ) : (
@@ -217,7 +217,7 @@ export default function SpacesPage() {
               ) : null}
               <div className="pt-2">
                 <Link href={`/spaces/${space.id}/chat`}>
-                  <Button variant="outline">Open space</Button>
+                  <Button variant="secondary">Open space</Button>
                 </Link>
               </div>
             </Card>

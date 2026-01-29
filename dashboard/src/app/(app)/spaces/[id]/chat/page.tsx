@@ -70,9 +70,9 @@ export default function SpaceChatPage({ params }: { params: { id: string } }) {
         <Card className="space-y-3">
           <h2 className="text-lg font-semibold">Chat</h2>
           {loading ? (
-            <LoadingState title="Loading messages..." />
+            <LoadingState label="Loading messages..." />
           ) : messages.length === 0 ? (
-            <EmptyState title="No messages yet" description="Start the conversation for this space." />
+            <EmptyState title="No messages yet" subtitle="Start the conversation for this space." />
           ) : (
             <div className="space-y-3">
               {messages.map((msg) => (

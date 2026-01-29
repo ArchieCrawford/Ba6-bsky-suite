@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -203,6 +204,9 @@ export default function FeedsPage() {
   const [loadingGates, setLoadingGates] = useState(false);
   const [entitlementStatus, setEntitlementStatus] = useState<Record<string, "active" | "locked" | "unknown">>({});
   const [unlockingGateId, setUnlockingGateId] = useState<string | null>(null);
+  const [unlockingFeedId, setUnlockingFeedId] = useState<string | null>(null);
+  const [unlockedFeeds, setUnlockedFeeds] = useState<Set<string>>(new Set());
+  const [hasSession, setHasSession] = useState(true);
 
   const [testSlug, setTestSlug] = useState("");
   const [testResults, setTestResults] = useState<TestRow[]>([]);
@@ -218,6 +222,8 @@ export default function FeedsPage() {
   const [createDescription, setCreateDescription] = useState("");
   const [creatingFeed, setCreatingFeed] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
+
+  const router = useRouter();
 
   const filteredFeeds = useMemo(() => {
     const term = search.toLowerCase();
@@ -793,6 +799,68 @@ export default function FeedsPage() {
     }
   };
 
+  const unlockFeed = async (feedId: string) => {
+    setUnlockingFeedId(feedId);
+    try {
+      const res = await withAuthFetch("/api/feeds/join", {
+        method: "POST",
+        body: JSON.stringify({ feed_id: feedId })
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (res.ok && payload?.ok) {
+        setUnlockedFeeds((prev) => new Set(prev).add(feedId));
+        toast.success("Unlocked");
+        return;
+      }
+
+      const reason = payload?.reason ?? payload?.error;
+      if (res.status === 402 || reason === "payment_required") {
+        const checkoutRes = await withAuthFetch("/api/billing/checkout", {
+          method: "POST",
+          body: JSON.stringify({
+            target_type: "feed",
+            target_id: feedId,
+            gate_action: "join"
+          })
+        });
+        const checkoutPayload = await checkoutRes.json().catch(() => ({}));
+        if (!checkoutRes.ok || !checkoutPayload?.url) {
+          throw new Error(checkoutPayload?.error ?? "Checkout failed");
+        }
+        window.location.href = checkoutPayload.url;
+        return;
+      }
+
+      if (reason === "wallet_required") {
+        toast.message("Connect a wallet to continue");
+        router.push("/wallets");
+        return;
+      }
+
+      if (reason === "wallet_not_verified") {
+        toast.message("Verify your wallet to continue");
+        router.push("/wallets");
+        return;
+      }
+
+      if (reason === "token_gate_not_implemented") {
+        toast.message("Token gate is wired. Holdings check not implemented yet.");
+        return;
+      }
+
+      throw new Error(payload?.message ?? payload?.error ?? "Unable to unlock");
+    } catch (err: any) {
+      if (String(err?.message ?? "").includes("Missing session")) {
+        toast.message("Sign in to unlock this feed");
+        router.push("/login");
+      } else {
+        toast.error(err?.message ?? "Unlock failed");
+      }
+    } finally {
+      setUnlockingFeedId(null);
+    }
+  };
+
   const saveFeedDetails = async () => {
     if (!selectedFeed) return;
     const titleValue = editTitle.trim();
@@ -871,6 +939,14 @@ export default function FeedsPage() {
   useEffect(() => {
     loadFeeds();
     loadAccounts();
+    let mounted = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+      setHasSession(Boolean(data.session));
+    });
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -942,6 +1018,7 @@ export default function FeedsPage() {
   if (error) return <ErrorState title="Feeds unavailable" subtitle={error} onRetry={loadFeeds} />;
 
   const feedLabel = selectedFeed?.title ?? selectedFeed?.display_name ?? selectedFeed?.slug ?? "";
+  const isUnlocked = selectedFeed ? unlockedFeeds.has(selectedFeed.id) : false;
 
   const gateJoinPreview = gateForm?.enrollmentTag
     ? `To join, post a message with #${normalizeTag(gateForm.enrollmentTag)}${
@@ -1121,11 +1198,32 @@ export default function FeedsPage() {
                 <div className="text-xs text-black/50">/{selectedFeed.slug}</div>
               </div>
               <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={isUnlocked || unlockingFeedId === selectedFeed.id}
+                  onClick={() => {
+                    if (!selectedFeed) return;
+                    if (!hasSession) {
+                      router.push("/login");
+                      return;
+                    }
+                    void unlockFeed(selectedFeed.id);
+                  }}
+                >
+                  {!hasSession
+                    ? "Sign in to unlock"
+                    : isUnlocked
+                      ? "Unlocked"
+                      : unlockingFeedId === selectedFeed.id
+                        ? "Unlocking..."
+                        : "Join / Unlock"}
+                </Button>
                 <span
                   className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide ${
                     selectedFeed.is_enabled
                       ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                      : "border-rose-200 bg-rose-50 text-rose-700"
+                    : "border-rose-200 bg-rose-50 text-rose-700"
                   }`}
                 >
                   {selectedFeed.is_enabled ? "Enabled" : "Disabled"}

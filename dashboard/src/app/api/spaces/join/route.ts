@@ -10,6 +10,14 @@ type JoinPayload = {
   invite_code?: string;
 };
 
+type InviteRow = {
+  id: string;
+  space_id: string;
+  uses: number;
+  max_uses: number | null;
+  expires_at: string | null;
+};
+
 export async function POST(request: Request) {
   try {
     const auth = await getAuthedSupabase(request);
@@ -21,8 +29,7 @@ export async function POST(request: Request) {
     const body = (await request.json().catch(() => ({}))) as JoinPayload;
     const inviteCode = typeof body.invite_code === "string" ? body.invite_code.trim() : "";
     let spaceId = typeof body.space_id === "string" ? body.space_id.trim() : "";
-    let inviteRow: { id: string; space_id: string; uses: number; max_uses: number | null; expires_at: string | null } | null =
-      null;
+    let inviteRow: InviteRow | null = null;
 
     if (inviteCode) {
       const service = createSupabaseServiceClient();
@@ -41,7 +48,7 @@ export async function POST(request: Request) {
       if (data.max_uses != null && data.uses >= data.max_uses) {
         return NextResponse.json({ error: "Invite code has no remaining uses" }, { status: 409 });
       }
-      inviteRow = data as typeof inviteRow;
+      inviteRow = data as InviteRow;
       spaceId = data.space_id;
     }
 

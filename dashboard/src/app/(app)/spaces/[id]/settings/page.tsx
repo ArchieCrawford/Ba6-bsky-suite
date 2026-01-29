@@ -117,7 +117,7 @@ export default function SpaceSettingsPage({ params }: { params: { id: string } }
 
   const handleSaveGate = async () => {
     try {
-      const config = { ...gateConfig, gate_actions: gateActions };
+      const config: Record<string, any> = { ...gateConfig, gate_actions: gateActions };
       if (gateType === "pay_gate") {
         config.provider = "stripe";
       }
@@ -320,7 +320,7 @@ export default function SpaceSettingsPage({ params }: { params: { id: string } }
                 {editingGateId ? "Update gate" : "Add gate"}
               </Button>
               {editingGateId ? (
-                <Button variant="outline" onClick={resetGateForm}>
+                <Button variant="secondary" onClick={resetGateForm}>
                   Cancel
                 </Button>
               ) : null}
@@ -337,10 +337,10 @@ export default function SpaceSettingsPage({ params }: { params: { id: string } }
                   <div className="flex items-center justify-between">
                     <span className="font-medium">{gate.gate_type}</span>
                     <div className="flex gap-2">
-                      <Button size="sm" variant="outline" onClick={() => handleEditGate(gate)}>
+                      <Button size="sm" variant="secondary" onClick={() => handleEditGate(gate)}>
                         Edit
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => handleDeleteGate(gate.id)}>
+                      <Button size="sm" variant="secondary" onClick={() => handleDeleteGate(gate.id)}>
                         Delete
                       </Button>
                     </div>

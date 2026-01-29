@@ -7,10 +7,12 @@ import { Button } from "@/components/ui/Button";
 import { toast } from "sonner";
 import { MobileNav } from "@/components/layout/MobileNav";
 import { MoreHorizontal } from "lucide-react";
+import { useIdentity } from "@/lib/identity/useIdentity";
 
 export function Topbar() {
   const router = useRouter();
   const [email, setEmail] = useState<string | null>(null);
+  const { identity } = useIdentity();
 
   useEffect(() => {
     let mounted = true;
@@ -57,7 +59,9 @@ export function Topbar() {
             <MoreHorizontal size={18} />
           </summary>
           <div className="absolute right-0 mt-2 w-56 rounded-2xl border border-black/10 bg-white p-3 text-xs text-black/70 shadow-soft">
-            <div className="rounded-xl bg-black/5 px-3 py-2 break-all">{email ?? "Signed in"}</div>
+            <div className="rounded-xl bg-black/5 px-3 py-2 break-all">
+              {identity?.handle ? `@${identity.handle}` : identity?.did ?? email ?? "Signed in"}
+            </div>
             <Button variant="ghost" size="sm" onClick={onSignOut} className="mt-3 w-full">
               Sign out
             </Button>
@@ -65,7 +69,9 @@ export function Topbar() {
         </details>
 
         <div className="hidden items-center gap-2 text-xs text-black/70 sm:flex sm:text-sm">
-          <span className="rounded-full bg-black/5 px-3 py-1 break-all">{email ?? "Signed in"}</span>
+          <span className="rounded-full bg-black/5 px-3 py-1 break-all">
+            {identity?.handle ? `@${identity.handle}` : identity?.did ?? email ?? "Signed in"}
+          </span>
           <Button variant="ghost" size="sm" onClick={onSignOut} className="w-auto">
             Sign out
           </Button>

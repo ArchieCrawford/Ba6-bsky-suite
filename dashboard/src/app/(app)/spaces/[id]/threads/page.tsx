@@ -77,9 +77,9 @@ export default function SpaceThreadsPage({ params }: { params: { id: string } })
         <Card className="space-y-3">
           <h2 className="text-lg font-semibold">Threads</h2>
           {loading ? (
-            <LoadingState title="Loading threads..." />
+            <LoadingState label="Loading threads..." />
           ) : threads.length === 0 ? (
-            <EmptyState title="No threads yet" description="Create the first discussion thread for this space." />
+            <EmptyState title="No threads yet" subtitle="Create the first discussion thread for this space." />
           ) : (
             <div className="space-y-3">
               {threads.map((thread) => (

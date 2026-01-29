@@ -78,9 +78,9 @@ export default function SpaceMembersPage({ params }: { params: { id: string } })
         <Card className="space-y-3">
           <h2 className="text-lg font-semibold">Members</h2>
           {loading ? (
-            <LoadingState title="Loading members..." />
+            <LoadingState label="Loading members..." />
           ) : members.length === 0 ? (
-            <EmptyState title="No members yet" description="Invite teammates or approve join requests." />
+            <EmptyState title="No members yet" subtitle="Invite teammates or approve join requests." />
           ) : (
             <div className="space-y-2">
               {members.map((member) => (
@@ -105,7 +105,7 @@ export default function SpaceMembersPage({ params }: { params: { id: string } })
           {!isOwnerOrAdmin ? (
             <p className="text-sm text-muted-foreground">Only owners and admins can review requests.</p>
           ) : requests.length === 0 ? (
-            <EmptyState title="No requests" description="Moderated join requests will appear here." />
+            <EmptyState title="No requests" subtitle="Moderated join requests will appear here." />
           ) : (
             <div className="space-y-2">
               {requests.map((req) => (
@@ -119,7 +119,7 @@ export default function SpaceMembersPage({ params }: { params: { id: string } })
                       <Button size="sm" onClick={() => handleRequest(req.id, "approve")}>
                         Approve
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => handleRequest(req.id, "deny")}>
+                      <Button size="sm" variant="secondary" onClick={() => handleRequest(req.id, "deny")}>
                         Deny
                       </Button>
                     </div>
