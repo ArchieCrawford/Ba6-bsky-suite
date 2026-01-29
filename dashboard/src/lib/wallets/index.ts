@@ -1,10 +1,2 @@
-export {
-  connectEvmInjected,
-  connectSolanaInjected,
-  connectWalletConnectEvm,
-  detectEvmInjected,
-  detectPhantomInjected,
-  isMobile,
-  openInMetaMaskDapp,
-  openInPhantomDapp
-} from "./connectors";
+export * from "./connectors";
+export * from "./tokenGatePhases";

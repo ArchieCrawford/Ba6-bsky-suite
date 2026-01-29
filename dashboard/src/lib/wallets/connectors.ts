@@ -1,74 +1,105 @@
-type EvmProvider = {
-  request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
-  providers?: EvmProvider[];
+export type EvmInjectedProvider = {
   isMetaMask?: boolean;
+  providers?: any[];
+  request: (args: { method: string; params?: any[] | object }) => Promise<any>;
 };
 
-type SolanaProvider = {
+export type SolanaInjectedProvider = {
   isPhantom?: boolean;
-  connect: () => Promise<void>;
-  signMessage: (message: Uint8Array, encoding: string) => Promise<{ signature?: Uint8Array } | Uint8Array>;
-  publicKey?: { toString?: () => string };
-  providers?: SolanaProvider[];
+  connect: () => Promise<{ publicKey: { toString: () => string } }>;
+  signMessage?: (message: Uint8Array, encoding?: string) => Promise<{ signature: Uint8Array }>;
 };
 
-const isClient = typeof window !== "undefined";
-
-export const isMobile = () => {
-  if (!isClient) return false;
-  return /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-};
-
-export const detectEvmInjected = (): EvmProvider | null => {
-  if (!isClient) return null;
-  const eth = (window as any)?.ethereum as EvmProvider | undefined;
-  if (!eth) return null;
-  if (Array.isArray(eth.providers) && eth.providers.length) {
-    const metamask = eth.providers.find((provider) => provider?.isMetaMask);
-    return metamask ?? eth.providers[0] ?? eth;
+declare global {
+  interface Window {
+    ethereum?: EvmInjectedProvider;
+    solana?: SolanaInjectedProvider;
   }
-  return eth;
-};
+}
 
-export const detectPhantomInjected = (): SolanaProvider | null => {
-  if (!isClient) return null;
-  const solana = (window as any)?.solana as SolanaProvider | undefined;
-  if (!solana) return null;
-  if (Array.isArray(solana.providers) && solana.providers.length) {
-    const phantom = solana.providers.find((provider) => provider?.isPhantom);
-    return phantom ?? solana.providers[0] ?? solana;
+export function isMobile() {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent || "";
+  return /Android|iPhone|iPad|iPod/i.test(ua);
+}
+
+export function getAppHost() {
+  if (typeof window === "undefined") return process.env.NEXT_PUBLIC_APP_HOST || "";
+  return (process.env.NEXT_PUBLIC_APP_HOST || window.location.host).replace(/^https?:\/\//, "");
+}
+
+export function getCurrentUrl() {
+  if (typeof window === "undefined") return "";
+  return window.location.href;
+}
+
+export function detectEvmInjected() {
+  if (typeof window === "undefined") return { ok: false as const, provider: null as any };
+  const eth = window.ethereum;
+  if (!eth || typeof eth.request !== "function") return { ok: false as const, provider: null as any };
+
+  // Some browsers expose multiple providers; pick MetaMask if present.
+  const providers = Array.isArray((eth as any).providers) ? (eth as any).providers : null;
+  if (providers?.length) {
+    const mm = providers.find((p: any) => p?.isMetaMask);
+    return { ok: true as const, provider: (mm || providers[0]) as EvmInjectedProvider };
   }
-  return solana;
-};
 
-export const openInMetaMaskDapp = () => {
-  if (!isClient) return;
-  const url = window.location.href.replace(/^https?:\/\//, "");
-  window.location.href = `https://metamask.app.link/dapp/${url}`;
-};
+  return { ok: true as const, provider: eth };
+}
 
-export const openInPhantomDapp = () => {
-  if (!isClient) return;
-  const target = encodeURIComponent(window.location.href);
-  window.location.href = `https://phantom.app/ul/browse/${target}`;
-};
+export function detectPhantomInjected() {
+  if (typeof window === "undefined") return { ok: false as const, provider: null as any };
+  const sol = window.solana;
+  if (!sol || typeof sol.connect !== "function") return { ok: false as const, provider: null as any };
+  if (!sol.isPhantom) return { ok: true as const, provider: sol }; // could be other Solana wallets later
+  return { ok: true as const, provider: sol };
+}
 
-export const connectEvmInjected = async () => {
-  const provider = detectEvmInjected();
-  if (!provider) return null;
-  const accounts = await provider.request({ method: "eth_requestAccounts" });
-  const address = Array.isArray(accounts) ? accounts[0] : (accounts as string | null);
-  return { provider, address: address ?? "" };
-};
+export function openInMetaMaskDapp(host?: string) {
+  const h = (host || getAppHost()).replace(/^https?:\/\//, "");
+  if (!h) return false;
+  const url = `https://metamask.app.link/dapp/${encodeURIComponent(h)}`;
+  if (typeof window !== "undefined") window.location.href = url;
+  return true;
+}
 
-export const connectSolanaInjected = async () => {
-  const provider = detectPhantomInjected();
-  if (!provider) return null;
-  await provider.connect();
-  const address = provider.publicKey?.toString?.() ?? "";
-  return { provider, address };
-};
+export function openInPhantomDapp(host?: string) {
+  const h = (host || getAppHost()).replace(/^https?:\/\//, "");
+  if (!h) return false;
+  const url = `https://phantom.app/ul/browse/https://${encodeURIComponent(h)}?ref=${encodeURIComponent(h)}`;
+  if (typeof window !== "undefined") window.location.href = url;
+  return true;
+}
 
-export const connectWalletConnectEvm = async () => {
-  throw new Error("WalletConnect is not enabled yet.");
-};
+export async function connectEvmInjected() {
+  const det = detectEvmInjected();
+  if (!det.ok) return { ok: false as const, reason: "no_injected_provider" };
+  const provider = det.provider;
+
+  const accounts = (await provider.request({ method: "eth_requestAccounts" })) as string[];
+  const address = accounts?.[0] || "";
+  if (!address) return { ok: false as const, reason: "no_account" };
+
+  return { ok: true as const, chain: "evm" as const, address };
+}
+
+export async function connectSolanaInjected() {
+  const det = detectPhantomInjected();
+  if (!det.ok) return { ok: false as const, reason: "no_injected_provider" };
+  const provider = det.provider;
+
+  const res = await provider.connect();
+  const address = res?.publicKey?.toString?.() || "";
+  if (!address) return { ok: false as const, reason: "no_account" };
+
+  return { ok: true as const, chain: "solana" as const, address };
+}
+
+export type WalletConnectEvmResult =
+  | { ok: true; chain: "evm"; address: string }
+  | { ok: false; reason: "walletconnect_not_configured" | "walletconnect_failed" };
+
+export async function connectWalletConnectEvm(): Promise<WalletConnectEvmResult> {
+  return { ok: false, reason: "walletconnect_not_configured" };
+}

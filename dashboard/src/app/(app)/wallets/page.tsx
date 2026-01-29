@@ -1,3 +1,4 @@
+```tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -11,8 +12,10 @@ import { toast } from "sonner";
 import {
   connectEvmInjected,
   connectSolanaInjected,
+  connectWalletConnectEvm,
   detectEvmInjected,
   detectPhantomInjected,
+  getAppHost,
   isMobile,
   openInMetaMaskDapp,
   openInPhantomDapp
@@ -39,11 +42,16 @@ type VerificationRow = {
 };
 
 export default function WalletsPage() {
+  const mobile = useMemo(() => isMobile(), []);
+  const host = useMemo(() => getAppHost(), []);
+  const evmInjected = useMemo(() => detectEvmInjected().ok, []);
+  const solInjected = useMemo(() => detectPhantomInjected().ok, []);
+
   const [wallets, setWallets] = useState<WalletRow[]>([]);
   const [verifications, setVerifications] = useState<VerificationRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [connecting, setConnecting] = useState<"evm" | "solana" | null>(null);
+  const [connecting, setConnecting] = useState<null | "evm" | "solana" | "wc">(null);
 
   const verifiedMap = useMemo(() => {
     const map = new Map<string, VerificationRow>();
@@ -79,6 +87,7 @@ export default function WalletsPage() {
         .select("id,chain,address,is_default,created_at")
         .order("created_at", { ascending: false });
       if (walletError) throw walletError;
+
       const { data: verificationRows, error: verifyError } = await supabase
         .from("wallet_verifications")
         .select("wallet_id,verified_at,created_at")
@@ -105,7 +114,13 @@ export default function WalletsPage() {
     return payload as { nonce: string; message: string };
   };
 
-  const verifyWallet = async (chain: "evm" | "solana", address: string, signature: string, nonce: string, message: string) => {
+  const verifyWallet = async (
+    chain: "evm" | "solana",
+    address: string,
+    signature: string,
+    nonce: string,
+    message: string
+  ) => {
     const res = await withAuthFetch("/api/wallets/verify", {
       method: "POST",
       body: JSON.stringify({ chain, address, signature, nonce, message })
@@ -117,26 +132,26 @@ export default function WalletsPage() {
     return payload as { ok: true; wallet_id: string; verified_at: string };
   };
 
-  const connectEvm = async () => {
-    if (!detectEvmInjected()) {
-      if (isMobile()) {
-        toast.message("Open BA6 in the MetaMask in-app browser.");
-        openInMetaMaskDapp();
-      } else {
-        toast.error("Install MetaMask or another EVM wallet.");
-      }
-      return;
-    }
+  const phaseAConnectAndVerifyEvm = async () => {
     setConnecting("evm");
     try {
-      const result = await connectEvmInjected();
-      const address = result?.address ?? "";
-      const provider = result?.provider;
-      if (!address) throw new Error("No wallet address returned");
+      const res = await connectEvmInjected();
+      if (!res.ok) {
+        if (mobile) {
+          toast.message("Mobile browsers can’t see wallets. Open BA6 inside MetaMask, or use WalletConnect.");
+          return;
+        }
+        toast.error(res.reason === "no_injected_provider" ? "MetaMask not detected in this browser." : "No EVM account.");
+        return;
+      }
+
       const { nonce, message } = await fetchNonce();
-      if (!provider) throw new Error("Wallet provider unavailable");
-      const signature = String(await provider.request({ method: "personal_sign", params: [message, address] }));
-      await verifyWallet("evm", address, signature, nonce, message);
+      const ethereum = (window as any)?.ethereum;
+      if (!ethereum?.request) throw new Error("EVM provider not available");
+
+      const signature = await ethereum.request({ method: "personal_sign", params: [message, res.address] });
+      await verifyWallet("evm", res.address, signature, nonce, message);
+
       toast.success("Wallet verified");
       await loadWallets();
     } catch (err: any) {
@@ -146,34 +161,48 @@ export default function WalletsPage() {
     }
   };
 
-  const connectSolana = async () => {
-    if (!detectPhantomInjected()) {
-      if (isMobile()) {
-        toast.message("Open BA6 in the Phantom in-app browser.");
-        openInPhantomDapp();
-      } else {
-        toast.error("Install Phantom or another Solana wallet.");
-      }
-      return;
-    }
+  const phaseAConnectAndVerifySolana = async () => {
     setConnecting("solana");
     try {
-      const result = await connectSolanaInjected();
-      const address = result?.address ?? "";
-      const provider = result?.provider;
-      if (!address) throw new Error("No Solana address returned");
+      const res = await connectSolanaInjected();
+      if (!res.ok) {
+        if (mobile) {
+          toast.message("Mobile browsers can’t see wallets. Open BA6 inside Phantom.");
+          return;
+        }
+        toast.error(res.reason === "no_injected_provider" ? "Phantom not detected in this browser." : "No Solana account.");
+        return;
+      }
+
       const { nonce, message } = await fetchNonce();
+      const solana = (window as any)?.solana;
+      if (!solana?.signMessage) throw new Error("Solana signMessage not available");
+
       const encoded = new TextEncoder().encode(message);
-      if (!provider) throw new Error("Wallet provider unavailable");
-      const signed = await provider.signMessage(encoded, "utf8");
-      const signatureBytes = signed instanceof Uint8Array ? signed : signed?.signature;
-      if (!signatureBytes) throw new Error("Missing signature");
+      const signed = await solana.signMessage(encoded, "utf8");
+      const signatureBytes = signed?.signature ?? signed;
       const signature = bs58.encode(signatureBytes);
-      await verifyWallet("solana", address, signature, nonce, message);
+
+      await verifyWallet("solana", res.address, signature, nonce, message);
+
       toast.success("Wallet verified");
       await loadWallets();
     } catch (err: any) {
       toast.error(err?.message ?? "Failed to verify wallet");
+    } finally {
+      setConnecting(null);
+    }
+  };
+
+  const connectWc = async () => {
+    setConnecting("wc");
+    try {
+      const res = await connectWalletConnectEvm();
+      if (!res.ok) {
+        toast.message("WalletConnect is not configured yet (coming next).");
+        return;
+      }
+      toast.success("Connected via WalletConnect");
     } finally {
       setConnecting(null);
     }
@@ -200,21 +229,77 @@ export default function WalletsPage() {
         </div>
       </div>
 
+      {mobile && (
+        <Card>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="text-sm font-semibold uppercase tracking-wide text-black/50">Mobile wallet mode</div>
+              <div className="text-xs text-black/50">
+                iPhone/Android browsers usually can’t see wallets. Open BA6 inside the wallet app browser.
+              </div>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button size="sm" variant="secondary" onClick={() => openInMetaMaskDapp(host)} className="w-full sm:w-auto">
+                Open in MetaMask
+              </Button>
+              <Button size="sm" variant="secondary" onClick={() => openInPhantomDapp(host)} className="w-full sm:w-auto">
+                Open in Phantom
+              </Button>
+              <Button size="sm" onClick={connectWc} disabled={connecting === "wc"} className="w-full sm:w-auto">
+                {connecting === "wc" ? "Connecting..." : "WalletConnect (EVM)"}
+              </Button>
+            </div>
+          </div>
+          <div className="mt-3 rounded-xl border border-black/10 bg-white/70 p-3 text-xs text-black/60">
+            After you open BA6 inside MetaMask/Phantom, come back here and tap “Verify” to sign the message.
+          </div>
+        </Card>
+      )}
+
       <Card>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div className="text-sm font-semibold uppercase tracking-wide text-black/50">Connect a wallet</div>
+            <div className="text-sm font-semibold uppercase tracking-wide text-black/50">Verify a wallet</div>
             <div className="text-xs text-black/50">Sign a verification message to prove ownership.</div>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Button size="sm" onClick={connectEvm} disabled={!!connecting} className="w-full sm:w-auto">
-              {connecting === "evm" ? "Connecting..." : "Connect EVM"}
+            <Button
+              size="sm"
+              onClick={phaseAConnectAndVerifyEvm}
+              disabled={!!connecting || (mobile && !evmInjected)}
+              className="w-full sm:w-auto"
+            >
+              {connecting === "evm" ? "Verifying..." : mobile ? "Verify EVM (in MetaMask)" : evmInjected ? "Verify MetaMask (EVM)" : "Verify EVM"}
             </Button>
-            <Button size="sm" variant="secondary" onClick={connectSolana} disabled={!!connecting} className="w-full sm:w-auto">
-              {connecting === "solana" ? "Connecting..." : "Connect Solana"}
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={phaseAConnectAndVerifySolana}
+              disabled={!!connecting || (mobile && !solInjected)}
+              className="w-full sm:w-auto"
+            >
+              {connecting === "solana"
+                ? "Verifying..."
+                : mobile
+                  ? "Verify Solana (in Phantom)"
+                  : solInjected
+                    ? "Verify Phantom (Solana)"
+                    : "Verify Solana"}
             </Button>
           </div>
         </div>
+
+        {mobile && !evmInjected && !solInjected && (
+          <div className="mt-3 rounded-xl border border-black/10 bg-white/70 p-3 text-xs text-black/60">
+            Wallet not detected in this browser. That’s normal on mobile. Use “Open in MetaMask/Phantom” above, then verify.
+          </div>
+        )}
+
+        {!mobile && !evmInjected && !solInjected && (
+          <div className="mt-3 rounded-xl border border-black/10 bg-white/70 p-3 text-xs text-black/60">
+            No injected wallets detected. Install MetaMask/Phantom extensions (desktop), or use wallet in-app browser on mobile.
+          </div>
+        )}
       </Card>
 
       {wallets.length === 0 ? (
@@ -222,6 +307,7 @@ export default function WalletsPage() {
       ) : (
         <Card>
           <div className="text-sm font-semibold uppercase tracking-wide text-black/50">Linked wallets</div>
+
           <div className="mt-4 space-y-3 sm:hidden">
             {wallets.map((wallet) => {
               const verified = verifiedMap.get(wallet.id);
@@ -259,12 +345,8 @@ export default function WalletsPage() {
                 <div key={wallet.id} className="grid grid-cols-12 items-center gap-2 px-4 py-3 text-sm">
                   <div className="col-span-3 text-xs text-black/70">{chainLabel(wallet.chain)}</div>
                   <div className="col-span-5 text-xs text-black/60 break-all">{wallet.address}</div>
-                  <div className="col-span-2 text-xs text-black/60">
-                    {verified?.verified_at ? "Verified" : "Unverified"}
-                  </div>
-                  <div className="col-span-2 text-xs text-black/60">
-                    {wallet.is_default ? "Default" : "-"}
-                  </div>
+                  <div className="col-span-2 text-xs text-black/60">{verified?.verified_at ? "Verified" : "Unverified"}</div>
+                  <div className="col-span-2 text-xs text-black/60">{wallet.is_default ? "Default" : "-"}</div>
                 </div>
               );
             })}
@@ -274,3 +356,4 @@ export default function WalletsPage() {
     </div>
   );
 }
+```
