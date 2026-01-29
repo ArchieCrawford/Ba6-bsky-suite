@@ -37,12 +37,16 @@ const matchesTag = (text: string, tag: string, caseInsensitive = true) => {
 
 const normalizeTag = (value: string) => value.trim().replace(/^#+/, "").replace(/\s+/g, "");
 
+const normalizeLegacyAction = (value: string) => (value === "premium_features" ? "premium_rules" : value);
+
 const normalizeGateActions = (value: unknown) => {
   if (Array.isArray(value)) {
-    return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0).map((item) => item.trim());
+    return value
+      .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+      .map((item) => normalizeLegacyAction(item.trim()));
   }
   if (typeof value === "string" && value.trim().length > 0) {
-    return [value.trim()];
+    return [normalizeLegacyAction(value.trim())];
   }
   return [];
 };
@@ -114,7 +118,15 @@ type JoinRequestRow = {
   created_at: string;
 };
 
-type PayGateAction = "join" | "submit" | "create_feed" | "premium_rules";
+type PayGateAction =
+  | "join"
+  | "submit"
+  | "create_feed"
+  | "premium_rules"
+  | "follow_via_ba6"
+  | "like_via_ba6"
+  | "repost_via_ba6"
+  | "reply_via_ba6";
 type GateType = "hashtag_opt_in" | "token_gate" | "pay_gate";
 
 type GateFormState = {
@@ -129,7 +141,7 @@ type GateFormState = {
   tokenChain: "base" | "solana";
   tokenAddress: string;
   minBalance: string;
-  gateAction: "join" | "submit" | "premium_features";
+  tokenGateActions: PayGateAction[];
   payPriceId: string;
   payLookupKey: string;
   payBillingMode: "one_time" | "subscription";
@@ -151,7 +163,7 @@ const defaultGateForm = (type: GateType = "hashtag_opt_in"): GateFormState => ({
   tokenChain: "base",
   tokenAddress: "",
   minBalance: "1",
-  gateAction: "join",
+  tokenGateActions: ["join"],
   payPriceId: "",
   payLookupKey: "",
   payBillingMode: "one_time",
@@ -458,11 +470,13 @@ export default function FeedsPage() {
           join_account: gateForm.joinAccount.trim() || null
         };
       } else if (gateForm.gateType === "token_gate") {
+        const actions = gateForm.tokenGateActions.length ? gateForm.tokenGateActions : ["join"];
         config = {
           chain: gateForm.tokenChain,
           token: gateForm.tokenAddress.trim(),
           min_balance: Number(gateForm.minBalance || "1"),
-          action: gateForm.gateAction
+          gate_actions: actions,
+          action: actions[0]
         };
       } else {
         const priceId = gateForm.payPriceId.trim();
@@ -1336,8 +1350,13 @@ export default function FeedsPage() {
                     {gates.map((gate) => {
                       const config = gate.config ?? {};
                       const isPayGate = gate.gate_type === "pay_gate";
+                      const isTokenGate = gate.gate_type === "token_gate";
                       const lookupKey = isPayGate && typeof config.lookup_key === "string" ? config.lookup_key.trim() : "";
-                      const actions = isPayGate ? normalizeGateActions(config.gate_actions) : [];
+                      const gateActions = (isPayGate || isTokenGate) ? normalizeGateActions(config.gate_actions) : [];
+                      const actions =
+                        isTokenGate && gateActions.length === 0 && typeof config.action === "string"
+                          ? [normalizeLegacyAction(config.action)]
+                          : gateActions;
                       const entitlement = lookupKey ? entitlementStatus[lookupKey] ?? "unknown" : "unknown";
                       const statusLabel =
                         entitlement === "active" ? "Active entitlement ✅" : entitlement === "locked" ? "Locked 🔒" : "Entitlement unknown";
@@ -1355,6 +1374,11 @@ export default function FeedsPage() {
                                   {lookupKey ? `Lookup key: ${lookupKey}` : "Missing lookup key"}
                                   {actions.length ? ` · Actions: ${actions.join(", ")}` : ""}
                                   <span className="ml-2">{statusLabel}</span>
+                                </div>
+                              )}
+                              {isTokenGate && (
+                                <div className="mt-1 text-xs text-black/50">
+                                  {actions.length ? `Actions: ${actions.join(", ")}` : "No actions configured"}
                                 </div>
                               )}
                             </div>
@@ -1384,15 +1408,15 @@ export default function FeedsPage() {
                                       submissionTag: config.submission_tag ?? "",
                                       requireMention: Boolean(config.require_mention),
                                       joinAccount: config.join_account ?? "",
-                                      tokenChain: "base",
-                                      tokenAddress: "",
-                                      minBalance: "1",
-                                      gateAction: "join",
-                                      payPriceId: "",
-                                      payLookupKey: "",
-                                      payBillingMode: "one_time",
-                                      payGateActions: ["join"],
-                                      payAmountDisplay: "",
+                                    tokenChain: "base",
+                                    tokenAddress: "",
+                                    minBalance: "1",
+                                    tokenGateActions: ["join"],
+                                    payPriceId: "",
+                                    payLookupKey: "",
+                                    payBillingMode: "one_time",
+                                    payGateActions: ["join"],
+                                    payAmountDisplay: "",
                                       payCurrency: ""
                                     });
                                   } else if (gate.gate_type === "pay_gate") {
@@ -1406,16 +1430,16 @@ export default function FeedsPage() {
                                       submissionTag: "",
                                       requireMention: false,
                                       joinAccount: "",
-                                      tokenChain: "base",
-                                      tokenAddress: "",
-                                      minBalance: "1",
-                                      gateAction: "join",
-                                      payPriceId: config.price_id ?? "",
-                                      payLookupKey: config.lookup_key ?? "",
-                                      payBillingMode: (config.billing_mode ?? "one_time") as "one_time" | "subscription",
-                                      payGateActions: actions.length ? actions : ["join"],
-                                      payAmountDisplay: config.amount_display ?? "",
-                                      payCurrency: config.currency ?? ""
+                                    tokenChain: "base",
+                                    tokenAddress: "",
+                                    minBalance: "1",
+                                    tokenGateActions: ["join"],
+                                    payPriceId: config.price_id ?? "",
+                                    payLookupKey: config.lookup_key ?? "",
+                                    payBillingMode: (config.billing_mode ?? "one_time") as "one_time" | "subscription",
+                                    payGateActions: actions.length ? actions : ["join"],
+                                    payAmountDisplay: config.amount_display ?? "",
+                                    payCurrency: config.currency ?? ""
                                     });
                                   } else {
                                     setGateForm({
@@ -1426,16 +1450,18 @@ export default function FeedsPage() {
                                       enrollmentTag: "",
                                       submissionTag: "",
                                       requireMention: false,
-                                      joinAccount: "",
-                                      tokenChain: config.chain ?? "base",
-                                      tokenAddress: config.token ?? "",
-                                      minBalance: String(config.min_balance ?? "1"),
-                                      gateAction: config.action ?? "join",
-                                      payPriceId: "",
-                                      payLookupKey: "",
-                                      payBillingMode: "one_time",
-                                      payGateActions: ["join"],
-                                      payAmountDisplay: "",
+                                    joinAccount: "",
+                                    tokenChain: config.chain ?? "base",
+                                    tokenAddress: config.token ?? "",
+                                    minBalance: String(config.min_balance ?? "1"),
+                                    tokenGateActions: normalizeGateActions(config.gate_actions).length
+                                      ? (normalizeGateActions(config.gate_actions) as PayGateAction[])
+                                      : ([normalizeLegacyAction(config.action ?? "join")] as PayGateAction[]),
+                                    payPriceId: "",
+                                    payLookupKey: "",
+                                    payBillingMode: "one_time",
+                                    payGateActions: ["join"],
+                                    payAmountDisplay: "",
                                       payCurrency: ""
                                     });
                                   }
@@ -1591,7 +1617,16 @@ export default function FeedsPage() {
                         <div>
                           <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Gate actions</label>
                           <div className="mt-2 grid gap-2 text-xs text-black/60 sm:grid-cols-2">
-                            {(["join", "submit", "create_feed", "premium_rules"] as PayGateAction[]).map((action) => (
+                            {([
+                              "join",
+                              "submit",
+                              "create_feed",
+                              "premium_rules",
+                              "follow_via_ba6",
+                              "like_via_ba6",
+                              "repost_via_ba6",
+                              "reply_via_ba6"
+                            ] as PayGateAction[]).map((action) => (
                               <label key={action} className="inline-flex items-center gap-2">
                                 <input
                                   type="checkbox"
@@ -1613,7 +1648,7 @@ export default function FeedsPage() {
                           </div>
                         </div>
                         <div className="rounded-lg border border-black/10 bg-white/80 p-3 text-xs text-black/60">
-                          Pay gates control BA6 actions (join, submit, premium rules). They do not restrict feed viewing in Bluesky.
+                          Pay gates control BA6 actions (join, submit, follow, like, repost, reply, premium rules). They do not restrict feed viewing in Bluesky.
                         </div>
                       </div>
                     ) : (
@@ -1648,21 +1683,40 @@ export default function FeedsPage() {
                           />
                         </div>
                         <div>
-                          <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Gate action</label>
-                          <Select
-                            value={gateForm.gateAction}
-                            onChange={(e) =>
-                              setGateForm({ ...gateForm, gateAction: e.target.value as GateFormState["gateAction"] })
-                            }
-                            className="min-h-[44px]"
-                          >
-                            <option value="join">Join</option>
-                            <option value="submit">Submit</option>
-                            <option value="premium_features">Premium features</option>
-                          </Select>
+                          <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Gate actions</label>
+                          <div className="mt-2 grid gap-2 text-xs text-black/60 sm:grid-cols-2">
+                            {([
+                              "join",
+                              "submit",
+                              "create_feed",
+                              "premium_rules",
+                              "follow_via_ba6",
+                              "like_via_ba6",
+                              "repost_via_ba6",
+                              "reply_via_ba6"
+                            ] as PayGateAction[]).map((action) => (
+                              <label key={action} className="inline-flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={gateForm.tokenGateActions.includes(action)}
+                                  onChange={(e) => {
+                                    const next = new Set(gateForm.tokenGateActions);
+                                    if (e.target.checked) {
+                                      next.add(action);
+                                    } else {
+                                      next.delete(action);
+                                    }
+                                    setGateForm({ ...gateForm, tokenGateActions: Array.from(next) });
+                                  }}
+                                  className="h-4 w-4"
+                                />
+                                {action.replace(/_/g, " ")}
+                              </label>
+                            ))}
+                          </div>
                         </div>
                         <div className="rounded-lg border border-black/10 bg-white/80 p-3 text-xs text-black/60">
-                          Token gates control BA6 actions (joining/submit), not viewing in Bluesky.
+                          Token gates control BA6 actions (joining, submit, follow, like, repost, reply), not viewing in Bluesky.
                         </div>
                       </div>
                     )}
