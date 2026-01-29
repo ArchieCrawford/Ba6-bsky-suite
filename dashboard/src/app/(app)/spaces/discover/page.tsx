@@ -112,6 +112,10 @@ export default function SpacesDiscoverPage() {
               {space.description ? (
                 <p className="text-sm text-muted-foreground">{space.description}</p>
               ) : null}
+              <div className="rounded-lg border border-dashed border-black/10 bg-white/60 px-3 py-2 text-xs text-muted-foreground">
+                <div className="font-medium text-foreground">/{space.slug}</div>
+                <div className="mt-1 break-all">Share: {`/spaces/${space.slug}/chat`}</div>
+              </div>
               <div className="flex flex-wrap gap-2 pt-2">
                 <Link href={`/spaces/${space.id}/chat`}>
                   <Button variant="secondary">Open space</Button>
