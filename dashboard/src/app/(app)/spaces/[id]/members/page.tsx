@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import { SpaceShell } from "@/components/spaces/SpaceShell";
 import { supabase } from "@/lib/supabaseClient";
 import { withAuthFetch } from "@/lib/withAuthFetch";
@@ -25,9 +26,11 @@ type RequestRow = {
   created_at: string;
 };
 
-export default function SpaceMembersPage({ params }: { params: { id: string } }) {
-  const spaceId = params.id;
-  const { membership } = useSpace(spaceId);
+export default function SpaceMembersPage() {
+  const params = useParams();
+  const spaceKey = typeof params?.id === "string" ? params.id : Array.isArray(params?.id) ? params.id[0] : "";
+  const { membership, space } = useSpace(spaceKey);
+  const resolvedId = space?.id ?? "";
   const [members, setMembers] = useState<MemberRow[]>([]);
   const [requests, setRequests] = useState<RequestRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -37,22 +40,23 @@ export default function SpaceMembersPage({ params }: { params: { id: string } })
     const { data: memberData } = await supabase
       .from("space_members")
       .select("id,user_id,role,status,joined_at")
-      .eq("space_id", spaceId)
+      .eq("space_id", resolvedId)
       .order("joined_at", { ascending: false });
     setMembers((memberData ?? []) as MemberRow[]);
 
     const { data: requestData } = await supabase
       .from("space_join_requests")
       .select("id,user_id,status,created_at")
-      .eq("space_id", spaceId)
+      .eq("space_id", resolvedId)
       .order("created_at", { ascending: false });
     setRequests((requestData ?? []) as RequestRow[]);
     setLoading(false);
   };
 
   useEffect(() => {
+    if (!resolvedId) return;
     void loadMembers();
-  }, [spaceId]);
+  }, [resolvedId]);
 
   const handleRequest = async (requestId: string, action: "approve" | "deny") => {
     try {
@@ -73,7 +77,7 @@ export default function SpaceMembersPage({ params }: { params: { id: string } })
   const isOwnerOrAdmin = membership?.role === "owner" || membership?.role === "admin";
 
   return (
-    <SpaceShell spaceId={spaceId} active="members">
+    <SpaceShell spaceId={spaceKey} active="members">
       <div className="grid gap-6 lg:grid-cols-[1.2fr,0.8fr]">
         <Card className="space-y-3">
           <h2 className="text-lg font-semibold">Members</h2>

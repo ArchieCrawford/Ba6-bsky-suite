@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import { SpaceShell } from "@/components/spaces/SpaceShell";
 import { supabase } from "@/lib/supabaseClient";
 import { withAuthFetch } from "@/lib/withAuthFetch";
@@ -9,6 +10,7 @@ import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Textarea";
 import { LoadingState, EmptyState } from "@/components/ui/States";
 import { toast } from "sonner";
+import { useSpace } from "@/lib/spaces/useSpace";
 
 type MessageRow = {
   id: string;
@@ -17,8 +19,11 @@ type MessageRow = {
   user_id: string;
 };
 
-export default function SpaceChatPage({ params }: { params: { id: string } }) {
-  const spaceId = params.id;
+export default function SpaceChatPage() {
+  const params = useParams();
+  const spaceKey = typeof params?.id === "string" ? params.id : Array.isArray(params?.id) ? params.id[0] : "";
+  const { space } = useSpace(spaceKey);
+  const resolvedId = space?.id ?? "";
   const [messages, setMessages] = useState<MessageRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [body, setBody] = useState("");
@@ -29,7 +34,7 @@ export default function SpaceChatPage({ params }: { params: { id: string } }) {
     const { data, error } = await supabase
       .from("space_messages")
       .select("id,body,created_at,user_id")
-      .eq("space_id", spaceId)
+      .eq("space_id", resolvedId)
       .order("created_at", { ascending: false })
       .limit(50);
     if (!error) {
@@ -39,17 +44,22 @@ export default function SpaceChatPage({ params }: { params: { id: string } }) {
   };
 
   useEffect(() => {
+    if (!resolvedId) return;
     void loadMessages();
-  }, [spaceId]);
+  }, [resolvedId]);
 
   const handleSend = async () => {
     const trimmed = body.trim();
     if (!trimmed) return;
+    if (!resolvedId) {
+      toast.error("Space not loaded");
+      return;
+    }
     setSending(true);
     try {
       const res = await withAuthFetch("/api/spaces/messages/send", {
         method: "POST",
-        body: JSON.stringify({ space_id: spaceId, body: trimmed })
+        body: JSON.stringify({ space_id: resolvedId, body: trimmed })
       });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -65,7 +75,7 @@ export default function SpaceChatPage({ params }: { params: { id: string } }) {
   };
 
   return (
-    <SpaceShell spaceId={spaceId} active="chat">
+    <SpaceShell spaceId={spaceKey} active="chat">
       <div className="grid gap-6 lg:grid-cols-[1.2fr,0.8fr]">
         <Card className="space-y-3">
           <h2 className="text-lg font-semibold">Chat</h2>

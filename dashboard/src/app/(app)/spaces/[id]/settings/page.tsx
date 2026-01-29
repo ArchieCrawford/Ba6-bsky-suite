@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useParams } from "next/navigation";
 import { SpaceShell } from "@/components/spaces/SpaceShell";
 import { supabase } from "@/lib/supabaseClient";
 import { withAuthFetch } from "@/lib/withAuthFetch";
@@ -37,9 +38,11 @@ const normalizeActions = (value: unknown) => {
   return [];
 };
 
-export default function SpaceSettingsPage({ params }: { params: { id: string } }) {
-  const spaceId = params.id;
-  const { space, membership, refresh } = useSpace(spaceId);
+export default function SpaceSettingsPage() {
+  const params = useParams();
+  const spaceKey = typeof params?.id === "string" ? params.id : Array.isArray(params?.id) ? params.id[0] : "";
+  const { space, membership, refresh } = useSpace(spaceKey);
+  const resolvedId = space?.id ?? "";
   const [joinMode, setJoinMode] = useState<"public" | "moderated" | "invite_only">("public");
   const [description, setDescription] = useState("");
   const [saving, setSaving] = useState(false);
@@ -61,7 +64,8 @@ export default function SpaceSettingsPage({ params }: { params: { id: string } }
 
   const loadGates = async () => {
     try {
-      const res = await withAuthFetch(`/api/spaces/${spaceId}/gates`);
+      if (!resolvedId) return;
+      const res = await withAuthFetch(`/api/spaces/${resolvedId}/gates`);
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(payload?.error ?? "Failed to load gates");
       setGates(payload?.gates ?? []);
@@ -71,9 +75,9 @@ export default function SpaceSettingsPage({ params }: { params: { id: string } }
   };
 
   useEffect(() => {
-    if (!isOwnerOrAdmin) return;
+    if (!isOwnerOrAdmin || !resolvedId) return;
     void loadGates();
-  }, [spaceId, isOwnerOrAdmin]);
+  }, [resolvedId, isOwnerOrAdmin]);
 
   const handleSaveSpace = async () => {
     if (!space) return;
@@ -95,9 +99,10 @@ export default function SpaceSettingsPage({ params }: { params: { id: string } }
 
   const handleInvite = async () => {
     try {
+      if (!resolvedId) throw new Error("Space not loaded");
       const res = await withAuthFetch("/api/spaces/invites/create", {
         method: "POST",
-        body: JSON.stringify({ space_id: spaceId })
+        body: JSON.stringify({ space_id: resolvedId })
       });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(payload?.error ?? "Invite failed");
@@ -117,6 +122,7 @@ export default function SpaceSettingsPage({ params }: { params: { id: string } }
 
   const handleSaveGate = async () => {
     try {
+      if (!resolvedId) throw new Error("Space not loaded");
       const config: Record<string, any> = { ...gateConfig, gate_actions: gateActions };
       if (gateType === "pay_gate") {
         config.provider = "stripe";
@@ -125,7 +131,7 @@ export default function SpaceSettingsPage({ params }: { params: { id: string } }
         config.enrollment_tag = typeof config.enrollment_tag === "string" ? config.enrollment_tag.trim() : "";
         config.submission_tag = typeof config.submission_tag === "string" ? config.submission_tag.trim() : "";
       }
-      const res = await withAuthFetch(`/api/spaces/${spaceId}/gates`, {
+      const res = await withAuthFetch(`/api/spaces/${resolvedId}/gates`, {
         method: "POST",
         body: JSON.stringify({
           gateId: editingGateId ?? undefined,
@@ -156,7 +162,8 @@ export default function SpaceSettingsPage({ params }: { params: { id: string } }
 
   const handleDeleteGate = async (gateId: string) => {
     try {
-      const res = await withAuthFetch(`/api/spaces/${spaceId}/gates`, {
+      if (!resolvedId) throw new Error("Space not loaded");
+      const res = await withAuthFetch(`/api/spaces/${resolvedId}/gates`, {
         method: "DELETE",
         body: JSON.stringify({ gateId })
       });
@@ -171,7 +178,7 @@ export default function SpaceSettingsPage({ params }: { params: { id: string } }
   const gateActionOptions = useMemo(() => SPACE_GATE_ACTIONS, []);
 
   return (
-    <SpaceShell spaceId={spaceId} active="settings">
+    <SpaceShell spaceId={spaceKey} active="settings">
       <div className="grid gap-6 lg:grid-cols-[1.2fr,0.8fr]">
         <Card className="space-y-3">
           <h2 className="text-lg font-semibold">Space settings</h2>

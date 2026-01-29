@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import { SpaceShell } from "@/components/spaces/SpaceShell";
 import { supabase } from "@/lib/supabaseClient";
 import { withAuthFetch } from "@/lib/withAuthFetch";
@@ -10,6 +11,7 @@ import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { LoadingState, EmptyState } from "@/components/ui/States";
 import { toast } from "sonner";
+import { useSpace } from "@/lib/spaces/useSpace";
 
 type ThreadRow = {
   id: string;
@@ -19,8 +21,11 @@ type ThreadRow = {
   user_id: string;
 };
 
-export default function SpaceThreadsPage({ params }: { params: { id: string } }) {
-  const spaceId = params.id;
+export default function SpaceThreadsPage() {
+  const params = useParams();
+  const spaceKey = typeof params?.id === "string" ? params.id : Array.isArray(params?.id) ? params.id[0] : "";
+  const { space } = useSpace(spaceKey);
+  const resolvedId = space?.id ?? "";
   const [threads, setThreads] = useState<ThreadRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [title, setTitle] = useState("");
@@ -32,7 +37,7 @@ export default function SpaceThreadsPage({ params }: { params: { id: string } })
     const { data, error } = await supabase
       .from("space_threads")
       .select("id,title,body,created_at,user_id")
-      .eq("space_id", spaceId)
+      .eq("space_id", resolvedId)
       .order("created_at", { ascending: false })
       .limit(50);
     if (!error) {
@@ -42,8 +47,9 @@ export default function SpaceThreadsPage({ params }: { params: { id: string } })
   };
 
   useEffect(() => {
+    if (!resolvedId) return;
     void loadThreads();
-  }, [spaceId]);
+  }, [resolvedId]);
 
   const handleCreate = async () => {
     const trimmedTitle = title.trim();
@@ -51,11 +57,15 @@ export default function SpaceThreadsPage({ params }: { params: { id: string } })
       toast.error("Title is required");
       return;
     }
+    if (!resolvedId) {
+      toast.error("Space not loaded");
+      return;
+    }
     setSaving(true);
     try {
       const res = await withAuthFetch("/api/spaces/threads/create", {
         method: "POST",
-        body: JSON.stringify({ space_id: spaceId, title: trimmedTitle, body: body.trim() || null })
+        body: JSON.stringify({ space_id: resolvedId, title: trimmedTitle, body: body.trim() || null })
       });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -72,7 +82,7 @@ export default function SpaceThreadsPage({ params }: { params: { id: string } })
   };
 
   return (
-    <SpaceShell spaceId={spaceId} active="threads">
+    <SpaceShell spaceId={spaceKey} active="threads">
       <div className="grid gap-6 lg:grid-cols-[1.2fr,0.8fr]">
         <Card className="space-y-3">
           <h2 className="text-lg font-semibold">Threads</h2>

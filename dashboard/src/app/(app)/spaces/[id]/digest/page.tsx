@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import { SpaceShell } from "@/components/spaces/SpaceShell";
 import { supabase } from "@/lib/supabaseClient";
 import { withAuthFetch } from "@/lib/withAuthFetch";
@@ -9,6 +10,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { toast } from "sonner";
+import { useSpace } from "@/lib/spaces/useSpace";
 
 type DigestRow = {
   include_keywords: string[];
@@ -26,8 +28,11 @@ const csvToList = (value: string) =>
     .map((item) => item.trim())
     .filter(Boolean);
 
-export default function SpaceDigestPage({ params }: { params: { id: string } }) {
-  const spaceId = params.id;
+export default function SpaceDigestPage() {
+  const params = useParams();
+  const spaceKey = typeof params?.id === "string" ? params.id : Array.isArray(params?.id) ? params.id[0] : "";
+  const { space } = useSpace(spaceKey);
+  const resolvedId = space?.id ?? "";
   const [digest, setDigest] = useState<DigestRow | null>(null);
   const [saving, setSaving] = useState(false);
   const [sourcesInput, setSourcesInput] = useState("");
@@ -37,7 +42,7 @@ export default function SpaceDigestPage({ params }: { params: { id: string } }) 
       const { data, error } = await supabase
         .from("space_digests")
         .select("include_keywords,exclude_keywords,lang,include_mode,case_insensitive,sources")
-        .eq("space_id", spaceId)
+        .eq("space_id", resolvedId)
         .maybeSingle();
       if (!error && data) {
         const row = data as DigestRow;
@@ -57,18 +62,23 @@ export default function SpaceDigestPage({ params }: { params: { id: string } }) 
         });
       }
     };
+    if (!resolvedId) return;
     void load();
-  }, [spaceId]);
+  }, [resolvedId]);
 
   const handleSave = async () => {
     if (!digest) return;
+    if (!resolvedId) {
+      toast.error("Space not loaded");
+      return;
+    }
     setSaving(true);
     try {
       const sources = csvToList(sourcesInput).map((did) => ({ type: "account_list", did }));
       const res = await withAuthFetch("/api/spaces/digest/save", {
         method: "POST",
         body: JSON.stringify({
-          space_id: spaceId,
+          space_id: resolvedId,
           include_keywords: digest.include_keywords,
           exclude_keywords: digest.exclude_keywords,
           lang: digest.lang,
@@ -91,14 +101,14 @@ export default function SpaceDigestPage({ params }: { params: { id: string } }) 
 
   if (!digest) {
     return (
-      <SpaceShell spaceId={spaceId} active="digest">
+      <SpaceShell spaceId={spaceKey} active="digest">
         <Card>Loading digest...</Card>
       </SpaceShell>
     );
   }
 
   return (
-    <SpaceShell spaceId={spaceId} active="digest">
+    <SpaceShell spaceId={spaceKey} active="digest">
       <div className="grid gap-6 lg:grid-cols-[1.2fr,0.8fr]">
         <Card className="space-y-3">
           <h2 className="text-lg font-semibold">Digest builder</h2>
