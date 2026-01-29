@@ -16,6 +16,7 @@
     "@react-navigation/native": "^6.1.17",
     "@react-navigation/stack": "^6.4.0",
     "@supabase/supabase-js": "^2.45.4",
+    "@types/react": "~18.2.79",
     "expo": "~51.0.8",
     "expo-haptics": "~13.0.1",
     "expo-secure-store": "~13.0.1",
