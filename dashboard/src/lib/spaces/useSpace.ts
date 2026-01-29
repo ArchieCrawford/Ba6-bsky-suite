@@ -35,6 +35,16 @@ export function useSpace(spaceId: string): UseSpaceState {
     try {
       setLoading(true);
       setError(null);
+      const isUuid =
+        typeof spaceId === "string" &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(spaceId);
+      if (!isUuid) {
+        setSpace(null);
+        setMembership(null);
+        setUserId(null);
+        setError("Invalid space id");
+        return;
+      }
       const { data: userData, error: userError } = await supabase.auth.getUser();
       if (userError || !userData.user) {
         setUserId(null);
