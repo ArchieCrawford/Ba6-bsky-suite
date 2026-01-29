@@ -26,12 +26,15 @@ export async function GET(request: Request) {
       .rpc("ensure_identity", { p_user_id: data.user.id })
       .single();
     if (identityError) throw identityError;
-    const identityRow = identity as { did?: string | null; handle?: string | null; did_type?: string | null } | null;
+    const identityRow = identity as
+      | { did?: string | null; handle?: string | null; did_type?: string | null; username?: string | null }
+      | null;
 
     return NextResponse.json({
       did: identityRow?.did ?? null,
       handle: identityRow?.handle ?? null,
-      did_type: identityRow?.did_type ?? null
+      did_type: identityRow?.did_type ?? null,
+      username: identityRow?.username ?? null
     });
   } catch (err: any) {
     return NextResponse.json({ error: err?.message ?? "Failed to load identity" }, { status: 500 });

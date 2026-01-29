@@ -7,6 +7,7 @@ export type IdentityRow = {
   did: string | null;
   handle: string | null;
   did_type: string | null;
+  username?: string | null;
 };
 
 export function useIdentity() {

@@ -51,6 +51,10 @@ export default function WalletsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [connecting, setConnecting] = useState<null | "evm" | "solana" | "wc">(null);
+  const [username, setUsername] = useState("");
+  const [usernameSaving, setUsernameSaving] = useState(false);
+  const [usernameLoading, setUsernameLoading] = useState(true);
+  const [usernameError, setUsernameError] = useState<string | null>(null);
 
   const verifiedMap = useMemo(() => {
     const map = new Map<string, VerificationRow>();
@@ -101,6 +105,48 @@ export default function WalletsPage() {
       toast.error(message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadIdentity = async () => {
+    setUsernameLoading(true);
+    setUsernameError(null);
+    try {
+      const res = await withAuthFetch("/api/identity/me");
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(payload?.error ?? "Unable to load identity");
+      }
+      setUsername(typeof payload?.username === "string" ? payload.username : "");
+    } catch (err: any) {
+      setUsernameError(err?.message ?? "Unable to load identity");
+    } finally {
+      setUsernameLoading(false);
+    }
+  };
+
+  const saveUsername = async () => {
+    setUsernameSaving(true);
+    try {
+      const res = await withAuthFetch("/api/identity/username", {
+        method: "POST",
+        body: JSON.stringify({ username })
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (payload?.error === "username_taken") {
+          throw new Error("That username is already taken.");
+        }
+        if (payload?.error === "invalid_username") {
+          throw new Error("Usernames must be 3–20 chars, start with a letter, and use a–z, 0–9, _."); 
+        }
+        throw new Error(payload?.error ?? "Unable to save username");
+      }
+      toast.success("Username saved");
+    } catch (err: any) {
+      toast.error(err?.message ?? "Unable to save username");
+    } finally {
+      setUsernameSaving(false);
     }
   };
 
@@ -209,6 +255,7 @@ export default function WalletsPage() {
 
   useEffect(() => {
     loadWallets();
+    loadIdentity();
   }, []);
 
   if (loading) return <LoadingState label="Loading wallets" />;
@@ -254,6 +301,31 @@ export default function WalletsPage() {
           </div>
         </Card>
       )}
+
+      <Card className="space-y-3">
+        <div>
+          <div className="text-xs uppercase tracking-[0.3em] text-black/40">Username</div>
+          <div className="text-sm text-black/60">Set a BA6 username for mentions and DMs.</div>
+        </div>
+        {usernameLoading ? (
+          <LoadingState label="Loading username" />
+        ) : (
+          <>
+            <Input
+              placeholder="yourname"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+            />
+            <div className="text-xs text-black/50">
+              3–20 characters, starts with a letter, and only a–z, 0–9, and underscore.
+            </div>
+            {usernameError ? <div className="text-xs text-red-600">{usernameError}</div> : null}
+            <Button onClick={saveUsername} disabled={usernameSaving}>
+              Save username
+            </Button>
+          </>
+        )}
+      </Card>
 
       <Card>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
