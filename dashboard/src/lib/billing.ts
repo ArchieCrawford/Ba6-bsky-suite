@@ -1,5 +1,6 @@
 import Stripe from "stripe";
 import { createSupabaseServiceClient } from "@/lib/supabaseServer";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 type PayGateConfig = {
   provider?: string;
@@ -38,8 +39,11 @@ const normalizeGateActions = (value: unknown): string[] => {
   return [];
 };
 
-export async function getPayGateForAction(feedId: string, gateAction: string) {
-  const supa = createSupabaseServiceClient();
+export async function getPayGateForAction(
+  supa: SupabaseClient,
+  feedId: string,
+  gateAction: string
+) {
   const { data, error } = await supa
     .from("feed_gates")
     .select("id,config,is_enabled")
@@ -64,9 +68,10 @@ export async function findStripeCustomerIdForUser(userId: string) {
   const supa = createSupabaseServiceClient();
   const { data, error } = await supa
     .schema("stripe")
-    .from("customers")
-    .select("id,metadata,deleted")
-    .eq("metadata->>supabase_user_id", userId);
+    .from("customers_by_supabase_user")
+    .select("id,deleted,created")
+    .eq("supabase_user_id", userId)
+    .order("created", { ascending: false });
   if (error) throw error;
 
   const rows = (data ?? []) as Array<{ id: string; deleted?: boolean | null }>;

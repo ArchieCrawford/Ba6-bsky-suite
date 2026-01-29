@@ -8,6 +8,15 @@ import { Button } from "@/components/ui/Button";
 import { MobileCard } from "@/components/ui/MobileCard";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/States";
 import { toast } from "sonner";
+import {
+  connectEvmInjected,
+  connectSolanaInjected,
+  detectEvmInjected,
+  detectPhantomInjected,
+  isMobile,
+  openInMetaMaskDapp,
+  openInPhantomDapp
+} from "@/lib/wallets";
 
 const chainLabel = (chain: string) => {
   if (chain === "evm") return "Ethereum (EVM)";
@@ -109,19 +118,24 @@ export default function WalletsPage() {
   };
 
   const connectEvm = async () => {
-    if (typeof window === "undefined") return;
-    const ethereum = (window as any)?.ethereum;
-    if (!ethereum) {
-      toast.error("Install MetaMask or another EVM wallet.");
+    if (!detectEvmInjected()) {
+      if (isMobile()) {
+        toast.message("Open BA6 in the MetaMask in-app browser.");
+        openInMetaMaskDapp();
+      } else {
+        toast.error("Install MetaMask or another EVM wallet.");
+      }
       return;
     }
     setConnecting("evm");
     try {
-      const accounts = await ethereum.request({ method: "eth_requestAccounts" });
-      const address = Array.isArray(accounts) ? accounts[0] : accounts;
+      const result = await connectEvmInjected();
+      const address = result?.address ?? "";
+      const provider = result?.provider;
       if (!address) throw new Error("No wallet address returned");
       const { nonce, message } = await fetchNonce();
-      const signature = await ethereum.request({ method: "personal_sign", params: [message, address] });
+      if (!provider) throw new Error("Wallet provider unavailable");
+      const signature = String(await provider.request({ method: "personal_sign", params: [message, address] }));
       await verifyWallet("evm", address, signature, nonce, message);
       toast.success("Wallet verified");
       await loadWallets();
@@ -133,21 +147,27 @@ export default function WalletsPage() {
   };
 
   const connectSolana = async () => {
-    if (typeof window === "undefined") return;
-    const solana = (window as any)?.solana;
-    if (!solana) {
-      toast.error("Install Phantom or another Solana wallet.");
+    if (!detectPhantomInjected()) {
+      if (isMobile()) {
+        toast.message("Open BA6 in the Phantom in-app browser.");
+        openInPhantomDapp();
+      } else {
+        toast.error("Install Phantom or another Solana wallet.");
+      }
       return;
     }
     setConnecting("solana");
     try {
-      await solana.connect();
-      const address = solana.publicKey?.toString?.();
+      const result = await connectSolanaInjected();
+      const address = result?.address ?? "";
+      const provider = result?.provider;
       if (!address) throw new Error("No Solana address returned");
       const { nonce, message } = await fetchNonce();
       const encoded = new TextEncoder().encode(message);
-      const signed = await solana.signMessage(encoded, "utf8");
-      const signatureBytes = signed?.signature ?? signed;
+      if (!provider) throw new Error("Wallet provider unavailable");
+      const signed = await provider.signMessage(encoded, "utf8");
+      const signatureBytes = signed instanceof Uint8Array ? signed : signed?.signature;
+      if (!signatureBytes) throw new Error("Missing signature");
       const signature = bs58.encode(signatureBytes);
       await verifyWallet("solana", address, signature, nonce, message);
       toast.success("Wallet verified");

@@ -42,7 +42,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing feed or gate action" }, { status: 400 });
     }
 
-    const payGate = await getPayGateForAction(feedId, gateAction);
+    const payGate = await getPayGateForAction(supa, feedId, gateAction);
     if (!payGate) {
       return NextResponse.json({ error: "No active pay gate for this action" }, { status: 404 });
     }

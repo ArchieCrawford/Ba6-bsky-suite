@@ -59,7 +59,7 @@ export async function POST(request: Request, context: { params: Promise<{ feedId
         return NextResponse.json({ error: "Missing requester DID" }, { status: 400 });
       }
 
-      const payGate = await getPayGateForAction(feedId, "join");
+      const payGate = await getPayGateForAction(supa, feedId, "join");
       if (payGate) {
         const lookupKey = typeof payGate.config?.lookup_key === "string" ? payGate.config.lookup_key.trim() : "";
         if (!lookupKey) {

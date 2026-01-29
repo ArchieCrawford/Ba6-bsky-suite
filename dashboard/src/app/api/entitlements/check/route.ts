@@ -33,7 +33,7 @@ export async function POST(request: Request) {
     let lookupKey = typeof body.lookupKey === "string" ? body.lookupKey.trim() : "";
 
     if (!lookupKey && body.feedId && body.gateAction) {
-      const gate = await getPayGateForAction(body.feedId, body.gateAction);
+      const gate = await getPayGateForAction(supa, body.feedId, body.gateAction);
       lookupKey = typeof gate?.config?.lookup_key === "string" ? gate.config.lookup_key.trim() : "";
     }
 
