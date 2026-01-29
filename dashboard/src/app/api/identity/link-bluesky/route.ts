@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createSupabaseServerClient } from "@/lib/supabaseServer";
+import { createSupabaseServerClient, createSupabaseServiceClient } from "@/lib/supabaseServer";
 
 export const runtime = "nodejs";
 
@@ -34,7 +34,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid DID" }, { status: 400 });
     }
 
-    const { data: existing } = await supa.from("identities").select("user_id").eq("did", did).maybeSingle();
+    const service = createSupabaseServiceClient();
+    const { data: existing } = await service.from("identities").select("user_id").eq("did", did).maybeSingle();
     if (existing && existing.user_id !== data.user.id) {
       return NextResponse.json({ error: "DID already linked to another user" }, { status: 409 });
     }
