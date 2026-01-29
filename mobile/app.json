@@ -5,9 +5,15 @@
     "scheme": "ba6",
     "version": "0.1.0",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "platforms": ["ios", "android"],
     "ios": { "supportsTablet": true },
     "android": { "adaptiveIcon": { "backgroundColor": "#ffffff" } },
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
     "plugins": ["expo-secure-store"]
   }
 }
