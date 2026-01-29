@@ -132,10 +132,17 @@ export default function SpacesPage() {
   return (
     <div className="space-y-6">
       <Card className="space-y-3">
-        <h1 className="text-2xl font-semibold">Spaces</h1>
-        <p className="text-sm text-muted-foreground">
-          Spaces are the home for chat, threads, and digest tools. Create one for each group, topic, or workflow.
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold">Spaces</h1>
+            <p className="text-sm text-muted-foreground">
+              Spaces are the home for chat, threads, and digest tools. Create one for each group, topic, or workflow.
+            </p>
+          </div>
+          <Link href="/spaces/discover">
+            <Button variant="secondary">Discover spaces</Button>
+          </Link>
+        </div>
       </Card>
 
       <div className="grid gap-6 lg:grid-cols-[1.1fr,0.9fr]">
