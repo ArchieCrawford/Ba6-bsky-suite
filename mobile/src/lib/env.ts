@@ -1,0 +1,5 @@
+export const ENV = {
+  SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL ?? "",
+  SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "",
+  BA6_API_BASE: process.env.EXPO_PUBLIC_BA6_API_BASE ?? ""
+};

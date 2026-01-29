@@ -1,0 +1,13 @@
+{
+  "expo": {
+    "name": "BA6",
+    "slug": "ba6-mobile",
+    "scheme": "ba6",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "platforms": ["ios", "android"],
+    "ios": { "supportsTablet": true },
+    "android": { "adaptiveIcon": { "backgroundColor": "#ffffff" } },
+    "plugins": ["expo-secure-store"]
+  }
+}
