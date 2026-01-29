@@ -21,6 +21,8 @@ type AccountRow = {
   last_auth_at: string | null;
 };
 
+const formatChain = (chain: string) => (chain === "evm" ? "ethereum" : chain);
+
 export default function AccountsPage() {
   const [accounts, setAccounts] = useState<AccountRow[]>([]);
   const [wallets, setWallets] = useState<WalletRow[]>([]);
@@ -454,7 +456,7 @@ export default function AccountsPage() {
             {wallets.map((wallet) => (
               <MobileCard
                 key={wallet.id}
-                title={`${wallet.chain} (${wallet.provider})`}
+                title={`${formatChain(wallet.chain)} (${wallet.provider})`}
                 subtitle={wallet.address}
                 status={
                   <span className={`text-xs font-semibold ${wallet.is_default ? "text-emerald-600" : "text-black/40"}`}>
@@ -482,7 +484,7 @@ export default function AccountsPage() {
               {wallets.map((wallet) => (
                 <div key={wallet.id} className="grid grid-cols-12 items-center gap-2 px-4 py-3 text-sm">
                   <div className="col-span-3 font-semibold text-ink capitalize">
-                    {wallet.chain} ({wallet.provider})
+                    {formatChain(wallet.chain)} ({wallet.provider})
                   </div>
                   <div className="col-span-5 text-xs text-black/60 break-all">{wallet.address}</div>
                   <div className="col-span-2 text-xs text-black/60">

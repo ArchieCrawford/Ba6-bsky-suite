@@ -5,7 +5,7 @@ export type WalletRow = {
   id: string;
   user_id: string;
   provider: string;
-  chain: string;
+  chain: "evm" | "solana" | string;
   network: string | null;
   address: string;
   magic_issuer: string | null;
@@ -72,7 +72,7 @@ export async function ensureUserAndWallet(input: WalletUpsertInput): Promise<Ens
 
   const { data: wallet, error: walletError } = await supabase
     .from("wallets")
-    .upsert(payload, { onConflict: "provider,chain,address" })
+    .upsert(payload, { onConflict: "user_id,chain,address" })
     .select("id,user_id,provider,chain,network,address,magic_issuer,magic_user_id,is_default,is_verified,created_at,updated_at")
     .single();
   if (walletError) {

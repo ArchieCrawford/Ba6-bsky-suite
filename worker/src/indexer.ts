@@ -23,11 +23,13 @@ type SearchPostRecord = {
   text?: string;
 };
 
-type OptInRule = {
+type HashtagGate = {
   feed_id: string;
-  opt_in_tag: string;
-  opt_in_mode: "public" | "moderated";
-  source_strategy: "curated" | "opt_in";
+  mode: "public" | "moderated";
+  enrollment_tag: string;
+  submission_tag?: string | null;
+  require_mention: boolean;
+  join_account?: string | null;
 };
 
 const DEFAULT_INTERVAL_MS = 120000;
@@ -72,21 +74,26 @@ async function fetchSourceDids() {
   return Array.from(new Set(raw));
 }
 
-async function fetchOptInRules() {
+async function fetchHashtagGates() {
   const { data, error } = await supa
-    .from("feed_rules")
-    .select("feed_id,opt_in_tag,opt_in_mode,opt_in_enabled,source_strategy")
-    .eq("opt_in_enabled", true)
-    .not("opt_in_tag", "is", null);
+    .from("feed_gates")
+    .select("feed_id,gate_type,mode,config,is_enabled")
+    .eq("gate_type", "hashtag_opt_in")
+    .eq("is_enabled", true);
   if (error) throw error;
   return (data ?? [])
-    .map((row: any) => ({
-      feed_id: row.feed_id,
-      opt_in_tag: normalizeTag(String(row.opt_in_tag ?? "")),
-      opt_in_mode: (row.opt_in_mode ?? "public") as "public" | "moderated",
-      source_strategy: (row.source_strategy ?? "curated") as "curated" | "opt_in"
-    }))
-    .filter((row: OptInRule) => row.opt_in_tag && row.source_strategy === "opt_in");
+    .map((row: any) => {
+      const config = row.config ?? {};
+      return {
+        feed_id: row.feed_id,
+        mode: (row.mode ?? "public") as "public" | "moderated",
+        enrollment_tag: normalizeTag(String(config.enrollment_tag ?? "")),
+        submission_tag: typeof config.submission_tag === "string" ? normalizeTag(config.submission_tag) : null,
+        require_mention: Boolean(config.require_mention),
+        join_account: typeof config.join_account === "string" ? config.join_account : null
+      } satisfies HashtagGate;
+    })
+    .filter((gate: HashtagGate) => gate.enrollment_tag);
 }
 
 async function indexDid(agent: ReturnType<typeof agentFor>, did: string, limit: number) {
@@ -130,6 +137,7 @@ export function startIndexer(log: Logger) {
   let firstRun = true;
   let joinHandle: string | null = process.env.JOIN_ACCOUNT_HANDLE?.trim() || null;
   const joinDid = process.env.JOIN_ACCOUNT_DID?.trim() || null;
+  const joinHandleCache = new Map<string, string>();
   const enrollmentState = new Map<string, { windowStart: number; count: number }>();
 
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -163,8 +171,29 @@ export function startIndexer(log: Logger) {
     }
   };
 
-  const resolveJoinHandle = async () => {
-    if (joinHandle || !joinDid) return joinHandle;
+  const resolveJoinHandle = async (joinAccount?: string | null) => {
+    const normalized = joinAccount?.trim();
+    if (normalized) {
+      if (joinHandleCache.has(normalized)) return joinHandleCache.get(normalized) ?? null;
+      if (!normalized.startsWith("did:")) {
+        joinHandleCache.set(normalized, normalized);
+        return normalized;
+      }
+      try {
+        const profile = await agent.api.app.bsky.actor.getProfile({ actor: normalized });
+        const handle = profile.data.handle ?? null;
+        if (handle) joinHandleCache.set(normalized, handle);
+        return handle;
+      } catch (err: any) {
+        log("warn", "indexer_join_handle_failed", {
+          join_account: normalized,
+          error_message: err?.message ?? String(err)
+        });
+        return null;
+      }
+    }
+    if (joinHandle) return joinHandle;
+    if (!joinDid) return null;
     try {
       const profile = await agent.api.app.bsky.actor.getProfile({ actor: joinDid });
       joinHandle = profile.data.handle ?? null;
@@ -175,76 +204,69 @@ export function startIndexer(log: Logger) {
   };
 
   const runOptInScan = async () => {
-    if (!joinDid) return;
-    const rules = await fetchOptInRules();
-    if (!rules.length) return;
-    const handle = await resolveJoinHandle();
-    if (!handle) return;
-
-    const response = await agent.api.app.bsky.feed.searchPosts({ q: `@${handle}`, limit: opts.limit });
-    const posts = response.data.posts ?? [];
-    const tagMap = new Map<string, OptInRule[]>();
-    for (const rule of rules) {
-      const key = normalizeTag(rule.opt_in_tag);
-      if (!tagMap.has(key)) tagMap.set(key, []);
-      tagMap.get(key)?.push(rule);
-    }
+    const gates = await fetchHashtagGates();
+    if (!gates.length) return;
 
     const seen = new Set<string>();
-    for (const post of posts) {
-      const record = post.record as SearchPostRecord | undefined;
-      const text = typeof record?.text === "string" ? record.text : "";
-      const tags = extractTags(text);
-      if (!tags.length) continue;
-      const authorDid = post.author?.did;
-      if (!authorDid) continue;
-      for (const tag of tags) {
-        const rulesForTag = tagMap.get(tag);
-        if (!rulesForTag) continue;
-        for (const rule of rulesForTag) {
-          const key = `${rule.feed_id}:${authorDid}`;
-          if (seen.has(key)) continue;
-          seen.add(key);
 
-          if (!canEnroll(rule.feed_id)) {
-            log("warn", "indexer_opt_in_rate_limited", { feed_id: rule.feed_id, author_did: authorDid });
-            continue;
-          }
+    for (const gate of gates) {
+      const handle = gate.require_mention ? await resolveJoinHandle(gate.join_account) : null;
+      if (gate.require_mention && !handle) continue;
 
-          if (rule.opt_in_mode === "moderated") {
-            const { error: insertError } = await supa.from("feed_join_requests").insert({
-              feed_id: rule.feed_id,
-              account_did: authorDid,
-              status: "pending"
-            });
-            if (insertError && String(insertError.code) !== "23505") {
-              log("error", "indexer_opt_in_request_failed", {
-                feed_id: rule.feed_id,
-                author_did: authorDid,
-                error_message: insertError.message
-              });
-            } else {
-              recordEnrollment(rule.feed_id);
-              log("info", "indexer_opt_in_requested", { feed_id: rule.feed_id, author_did: authorDid });
-            }
-            continue;
-          }
+      const query = gate.require_mention ? `@${handle} #${gate.enrollment_tag}` : `#${gate.enrollment_tag}`;
+      const response = await agent.api.app.bsky.feed.searchPosts({ q: query, limit: opts.limit });
+      const posts = response.data.posts ?? [];
 
-          const { error: insertError } = await supa.from("feed_sources").insert({
-            feed_id: rule.feed_id,
-            source_type: "account_list",
-            account_did: authorDid
+      for (const post of posts) {
+        const record = post.record as SearchPostRecord | undefined;
+        const text = typeof record?.text === "string" ? record.text : "";
+        const tags = extractTags(text);
+        if (!tags.length || !tags.includes(gate.enrollment_tag)) continue;
+        const authorDid = post.author?.did;
+        if (!authorDid) continue;
+
+        const key = `${gate.feed_id}:${authorDid}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        if (!canEnroll(gate.feed_id)) {
+          log("warn", "indexer_opt_in_rate_limited", { feed_id: gate.feed_id, author_did: authorDid });
+          continue;
+        }
+
+        if (gate.mode === "moderated") {
+          const { error: insertError } = await supa.from("feed_join_requests").insert({
+            feed_id: gate.feed_id,
+            requester_did: authorDid,
+            status: "pending"
           });
           if (insertError && String(insertError.code) !== "23505") {
-            log("error", "indexer_opt_in_failed", {
-              feed_id: rule.feed_id,
+            log("error", "indexer_opt_in_request_failed", {
+              feed_id: gate.feed_id,
               author_did: authorDid,
               error_message: insertError.message
             });
           } else {
-            recordEnrollment(rule.feed_id);
-            log("info", "indexer_opt_in_enrolled", { feed_id: rule.feed_id, author_did: authorDid });
+            recordEnrollment(gate.feed_id);
+            log("info", "indexer_opt_in_requested", { feed_id: gate.feed_id, author_did: authorDid });
           }
+          continue;
+        }
+
+        const { error: insertError } = await supa.from("feed_sources").insert({
+          feed_id: gate.feed_id,
+          source_type: "account_list",
+          account_did: authorDid
+        });
+        if (insertError && String(insertError.code) !== "23505") {
+          log("error", "indexer_opt_in_failed", {
+            feed_id: gate.feed_id,
+            author_did: authorDid,
+            error_message: insertError.message
+          });
+        } else {
+          recordEnrollment(gate.feed_id);
+          log("info", "indexer_opt_in_enrolled", { feed_id: gate.feed_id, author_did: authorDid });
         }
       }
     }

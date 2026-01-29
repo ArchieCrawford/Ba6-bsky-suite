@@ -11,7 +11,7 @@ type MagicUserMetadata = {
 
 export type PendingWallet = {
   provider: "magic";
-  chain: "ethereum" | "solana";
+  chain: "evm" | "solana";
   address: string;
   network?: string | null;
   magic_issuer?: string | null;
@@ -92,7 +92,7 @@ export async function loginWithEmail(email: string): Promise<MagicLoginResult> {
   if (metadata?.publicAddress) {
     wallets.push({
       provider: "magic",
-      chain: "ethereum",
+      chain: "evm",
       address: metadata.publicAddress,
       network: MAGIC_ETH_NETWORK,
       magic_issuer: metadata.issuer ?? null,
@@ -111,7 +111,7 @@ export async function connectEthereum(email: string): Promise<PendingWallet> {
   }
   return {
     provider: "magic",
-    chain: "ethereum",
+    chain: "evm",
     address: metadata.publicAddress,
     network: MAGIC_ETH_NETWORK,
     magic_issuer: metadata.issuer ?? null,

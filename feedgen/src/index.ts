@@ -111,6 +111,16 @@ async function getFeedRules(feedId: string) {
   };
 }
 
+async function getFeedGates(feedId: string) {
+  const { data, error } = await supa
+    .from("feed_gates")
+    .select("gate_type,mode,config,is_enabled")
+    .eq("feed_id", feedId)
+    .eq("is_enabled", true);
+  if (error) throw error;
+  return (data ?? []) as { gate_type: string; mode: string | null; config: any; is_enabled: boolean }[];
+}
+
 async function getFeedSources(feedId: string) {
   const { data, error } = await supa
     .from("feed_sources")
@@ -168,7 +178,7 @@ async function queryPosts(params: {
 }
 
 async function querySubmitPosts(params: {
-  tag: string;
+  tags: string[];
   exclude: string[];
   caseInsensitive: boolean;
   lang?: string | null;
@@ -184,8 +194,8 @@ async function querySubmitPosts(params: {
 
   if (params.lang) q = q.eq("lang", params.lang);
 
-  const tagFilter = `%${params.tag}%`;
-  q = params.caseInsensitive ? q.ilike("text", tagFilter) : q.like("text", tagFilter);
+  const tagFilter = params.tags.length === 1 ? params.tags[0] : params.tags[0];
+  q = params.caseInsensitive ? q.ilike("text", `%${tagFilter}%`) : q.like("text", `%${tagFilter}%`);
 
   if (params.cursor) {
     const { created_at, uri } = params.cursor;
@@ -199,7 +209,7 @@ async function querySubmitPosts(params: {
   const exclude = params.exclude.map((s) => s.trim()).filter(Boolean);
   const filtered = (data ?? []).filter((row: any) => {
     const t = String(row.text ?? "");
-    if (!matchesTag(t, params.tag, params.caseInsensitive)) return false;
+    if (!params.tags.some((tag) => matchesTag(t, tag, params.caseInsensitive))) return false;
     if (exclude.length && exclude.some((k) => matchesKeyword(t, k, params.caseInsensitive))) return false;
     return true;
   });
@@ -274,6 +284,7 @@ app.get("/xrpc/app.bsky.feed.getFeedSkeleton", async (req: Request, res: Respons
     if (!cfg) return res.status(404).json({ error: "Feed not found" });
 
     const rules = await getFeedRules(cfg.id);
+    const gates = await getFeedGates(cfg.id);
     const sources = await getFeedSources(cfg.id);
     const authorDids = sources
       .filter((s) => s.source_type === "account_list" && s.account_did)
@@ -299,9 +310,17 @@ app.get("/xrpc/app.bsky.feed.getFeedSkeleton", async (req: Request, res: Respons
       });
     }
 
-    if (rules.submit_enabled && rules.submit_tag) {
+    const submitTags = gates
+      .filter((gate) => gate.gate_type === "hashtag_opt_in")
+      .map((gate) => {
+        const tag = gate.config?.submission_tag;
+        return typeof tag === "string" ? tag.trim() : "";
+      })
+      .filter(Boolean);
+
+    if (submitTags.length) {
       const submitPosts = await querySubmitPosts({
-        tag: rules.submit_tag,
+        tags: submitTags,
         exclude: rules.exclude_keywords ?? [],
         caseInsensitive,
         lang: rules.lang,

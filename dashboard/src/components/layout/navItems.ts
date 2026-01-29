@@ -7,6 +7,7 @@ import {
   Video,
   Rss,
   Users,
+  Wallet,
   Activity,
   LifeBuoy
 } from "lucide-react";
@@ -20,6 +21,7 @@ export const navItems = [
   { href: "/generate/video", label: "Generate Video", icon: Video },
   { href: "/feeds", label: "Feeds", icon: Rss },
   { href: "/accounts", label: "Accounts", icon: Users },
+  { href: "/wallets", label: "Wallets", icon: Wallet },
   { href: "/events", label: "Events", icon: Activity },
   { href: "https://support.ba6-bsky-suite.com", label: "Support", icon: LifeBuoy, external: true }
 ];

@@ -74,14 +74,8 @@ type RuleRow = {
   include_keywords: string[];
   exclude_keywords: string[];
   lang: string | null;
-  source_strategy: string | null;
   include_mode: string | null;
   case_insensitive: boolean | null;
-  opt_in_enabled: boolean | null;
-  opt_in_mode: string | null;
-  opt_in_tag: string | null;
-  submit_enabled: boolean | null;
-  submit_tag: string | null;
 };
 
 type TestRow = {
@@ -92,7 +86,54 @@ type TestRow = {
   included: boolean;
 };
 
-type TabKey = "basics" | "sources" | "rules" | "publish";
+type GateRow = {
+  id: string;
+  feed_id: string;
+  gate_type: string;
+  mode: string | null;
+  config: Record<string, any>;
+  is_enabled: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+type JoinRequestRow = {
+  id: string;
+  requester_did: string;
+  status: string;
+  created_at: string;
+};
+
+type GateFormState = {
+  id?: string | null;
+  gateType: "hashtag_opt_in" | "token_gate";
+  mode: "public" | "moderated";
+  isEnabled: boolean;
+  enrollmentTag: string;
+  submissionTag: string;
+  requireMention: boolean;
+  joinAccount: string;
+  tokenChain: "base" | "solana";
+  tokenAddress: string;
+  minBalance: string;
+  gateAction: "join" | "submit" | "premium_features";
+};
+
+type TabKey = "basics" | "sources" | "rules" | "gating" | "publish";
+
+const defaultGateForm = (type: "hashtag_opt_in" | "token_gate" = "hashtag_opt_in"): GateFormState => ({
+  gateType: type,
+  mode: "public",
+  isEnabled: true,
+  enrollmentTag: "",
+  submissionTag: "",
+  requireMention: false,
+  joinAccount: "",
+  tokenChain: "base",
+  tokenAddress: "",
+  minBalance: "1",
+  gateAction: "join"
+});
 
 export default function FeedsPage() {
   const [feeds, setFeeds] = useState<FeedRow[]>([]);
@@ -109,12 +150,6 @@ export default function FeedsPage() {
   const [lang, setLang] = useState("");
   const [includeMode, setIncludeMode] = useState<"any" | "all">("any");
   const [caseInsensitive, setCaseInsensitive] = useState(true);
-  const [sourceStrategy, setSourceStrategy] = useState<"curated" | "opt_in">("curated");
-  const [optInEnabled, setOptInEnabled] = useState(false);
-  const [optInMode, setOptInMode] = useState<"public" | "moderated">("public");
-  const [optInTag, setOptInTag] = useState("");
-  const [submitEnabled, setSubmitEnabled] = useState(false);
-  const [submitTag, setSubmitTag] = useState("");
 
   const [sources, setSources] = useState<SourceRow[]>([]);
   const [accounts, setAccounts] = useState<AccountRow[]>([]);
@@ -123,6 +158,12 @@ export default function FeedsPage() {
   const [newSource, setNewSource] = useState("");
   const [addingSource, setAddingSource] = useState(false);
   const [removingSource, setRemovingSource] = useState<string | null>(null);
+
+  const [gates, setGates] = useState<GateRow[]>([]);
+  const [joinRequests, setJoinRequests] = useState<JoinRequestRow[]>([]);
+  const [gateForm, setGateForm] = useState<GateFormState | null>(null);
+  const [savingGate, setSavingGate] = useState(false);
+  const [loadingGates, setLoadingGates] = useState(false);
 
   const [testSlug, setTestSlug] = useState("");
   const [testResults, setTestResults] = useState<TestRow[]>([]);
@@ -160,6 +201,21 @@ export default function FeedsPage() {
   }, [feeds, search, sortKey]);
 
   const selectedFeed = useMemo(() => feeds.find((feed) => feed.id === selectedFeedId) ?? null, [feeds, selectedFeedId]);
+
+  const withAuthFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    const { data, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) throw sessionError;
+    const token = data.session?.access_token;
+    if (!token) throw new Error("Missing session");
+    return fetch(input, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        ...(init?.headers ?? {}),
+        Authorization: `Bearer ${token}`
+      }
+    });
+  };
 
   const loadFeeds = async () => {
     setLoading(true);
@@ -218,9 +274,7 @@ export default function FeedsPage() {
     try {
       const { data: ruleRow, error: ruleError } = await supabase
         .from("feed_rules")
-        .select(
-          "id,include_keywords,exclude_keywords,lang,source_strategy,include_mode,case_insensitive,opt_in_enabled,opt_in_mode,opt_in_tag,submit_enabled,submit_tag"
-        )
+        .select("id,include_keywords,exclude_keywords,lang,include_mode,case_insensitive")
         .eq("feed_id", feedId)
         .maybeSingle();
       if (ruleError) throw ruleError;
@@ -230,27 +284,15 @@ export default function FeedsPage() {
         setInclude(listToKeyword(row.include_keywords ?? []));
         setExclude(listToKeyword(row.exclude_keywords ?? []));
         setLang(row.lang ?? "");
-        setSourceStrategy((row.source_strategy as "curated" | "opt_in") ?? "curated");
         setIncludeMode((row.include_mode as "any" | "all") ?? "any");
         setCaseInsensitive(row.case_insensitive ?? true);
-        setOptInEnabled(row.opt_in_enabled ?? false);
-        setOptInMode((row.opt_in_mode as "public" | "moderated") ?? "public");
-        setOptInTag(row.opt_in_tag ? normalizeTag(row.opt_in_tag) : "");
-        setSubmitEnabled(row.submit_enabled ?? false);
-        setSubmitTag(row.submit_tag ? normalizeTag(row.submit_tag) : "");
       } else {
         setRuleId(null);
         setInclude("");
         setExclude("");
         setLang("");
-        setSourceStrategy("curated");
         setIncludeMode("any");
         setCaseInsensitive(true);
-        setOptInEnabled(false);
-        setOptInMode("public");
-        setOptInTag("");
-        setSubmitEnabled(false);
-        setSubmitTag("");
       }
 
       const { data: sourceRows, error: sourceError } = await supabase
@@ -264,27 +306,47 @@ export default function FeedsPage() {
     }
   };
 
+  const loadGates = async (feedId: string) => {
+    setLoadingGates(true);
+    try {
+      const res = await withAuthFetch(`/api/feeds/${feedId}/gates`);
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(payload?.error ?? "Failed to load gates");
+      }
+      setGates(payload.gates ?? []);
+    } catch (err: any) {
+      toast.error(err?.message ?? "Failed to load gates");
+      setGates([]);
+    } finally {
+      setLoadingGates(false);
+    }
+  };
+
+  const loadJoinRequests = async (feedId: string) => {
+    try {
+      const res = await withAuthFetch(`/api/feeds/${feedId}/join-requests`);
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(payload?.error ?? "Failed to load join requests");
+      }
+      setJoinRequests(payload.requests ?? []);
+    } catch (err: any) {
+      toast.error(err?.message ?? "Failed to load join requests");
+      setJoinRequests([]);
+    }
+  };
+
   const saveRules = async () => {
     if (!selectedFeedId) return;
     try {
-      const cleanedOptInTag = normalizeTag(optInTag);
-      const cleanedSubmitTag = normalizeTag(submitTag);
       const payload = {
         feed_id: selectedFeedId,
-        rule_type: "keyword",
         include_keywords: keywordToList(include),
         exclude_keywords: keywordToList(exclude),
         lang: lang.trim() || null,
-        source_strategy: sourceStrategy,
         include_mode: includeMode,
-        case_insensitive: caseInsensitive,
-        opt_in_enabled: sourceStrategy === "opt_in" ? optInEnabled : false,
-        opt_in_mode: optInMode,
-        opt_in_tag:
-          sourceStrategy === "opt_in" && optInEnabled && cleanedOptInTag ? cleanedOptInTag : null,
-        submit_enabled: sourceStrategy === "opt_in" ? submitEnabled : false,
-        submit_tag:
-          sourceStrategy === "opt_in" && submitEnabled && cleanedSubmitTag ? cleanedSubmitTag : null
+        case_insensitive: caseInsensitive
       };
       if (ruleId) {
         const { error: updateError } = await supabase.from("feed_rules").update(payload).eq("id", ruleId);
@@ -298,7 +360,7 @@ export default function FeedsPage() {
         if (insertError) throw insertError;
         setRuleId(insertRow.id);
       }
-      toast.success("Settings saved");
+      toast.success("Rules saved");
     } catch (err: any) {
       toast.error(err?.message ?? "Failed to save rules");
     }
@@ -352,6 +414,102 @@ export default function FeedsPage() {
       toast.error(err?.message ?? "Failed to remove source");
     } finally {
       setRemovingSource(null);
+    }
+  };
+
+  const saveGate = async () => {
+    if (!selectedFeedId || !gateForm) return;
+    setSavingGate(true);
+    try {
+      const config =
+        gateForm.gateType === "hashtag_opt_in"
+          ? {
+              enrollment_tag: normalizeTag(gateForm.enrollmentTag),
+              submission_tag: normalizeTag(gateForm.submissionTag),
+              require_mention: gateForm.requireMention,
+              join_account: gateForm.joinAccount.trim() || null
+            }
+          : {
+              chain: gateForm.tokenChain,
+              token: gateForm.tokenAddress.trim(),
+              min_balance: Number(gateForm.minBalance || "1"),
+              action: gateForm.gateAction
+            };
+
+      const res = await withAuthFetch(`/api/feeds/${selectedFeedId}/gates`, {
+        method: "POST",
+        body: JSON.stringify({
+          gateId: gateForm.id ?? undefined,
+          gateType: gateForm.gateType,
+          mode: gateForm.gateType === "hashtag_opt_in" ? gateForm.mode : null,
+          config,
+          isEnabled: gateForm.isEnabled
+        })
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(payload?.error ?? "Failed to save gate");
+      }
+      toast.success("Gate saved");
+      setGateForm(null);
+      await loadGates(selectedFeedId);
+      await loadJoinRequests(selectedFeedId);
+    } catch (err: any) {
+      toast.error(err?.message ?? "Failed to save gate");
+    } finally {
+      setSavingGate(false);
+    }
+  };
+
+  const deleteGate = async (gateId: string) => {
+    if (!selectedFeedId) return;
+    if (!confirm("Remove this gate?")) return;
+    try {
+      const res = await withAuthFetch(`/api/feeds/${selectedFeedId}/gates`, {
+        method: "DELETE",
+        body: JSON.stringify({ gateId })
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(payload?.error ?? "Failed to delete gate");
+      }
+      toast.success("Gate removed");
+      await loadGates(selectedFeedId);
+    } catch (err: any) {
+      toast.error(err?.message ?? "Failed to delete gate");
+    }
+  };
+
+  const approveRequest = async (requestId: string) => {
+    if (!selectedFeedId) return;
+    try {
+      const res = await withAuthFetch(`/api/feeds/${selectedFeedId}/join-requests`, {
+        method: "POST",
+        body: JSON.stringify({ action: "approve", requestId })
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload?.error ?? "Failed to approve");
+      toast.success("Request approved");
+      await loadJoinRequests(selectedFeedId);
+      await loadRulesAndSources(selectedFeedId);
+    } catch (err: any) {
+      toast.error(err?.message ?? "Failed to approve request");
+    }
+  };
+
+  const rejectRequest = async (requestId: string) => {
+    if (!selectedFeedId) return;
+    try {
+      const res = await withAuthFetch(`/api/feeds/${selectedFeedId}/join-requests`, {
+        method: "POST",
+        body: JSON.stringify({ action: "reject", requestId })
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload?.error ?? "Failed to reject");
+      toast.success("Request rejected");
+      await loadJoinRequests(selectedFeedId);
+    } catch (err: any) {
+      toast.error(err?.message ?? "Failed to reject request");
     }
   };
 
@@ -430,9 +588,7 @@ export default function FeedsPage() {
 
       const { data: ruleRow, error: ruleError } = await supabase
         .from("feed_rules")
-        .select(
-          "include_keywords,exclude_keywords,lang,include_mode,case_insensitive,submit_enabled,submit_tag"
-        )
+        .select("include_keywords,exclude_keywords,lang,include_mode,case_insensitive")
         .eq("feed_id", feedRow.id)
         .maybeSingle();
       if (ruleError) throw ruleError;
@@ -442,6 +598,12 @@ export default function FeedsPage() {
         .select("source_type,account_did")
         .eq("feed_id", feedRow.id);
       if (sourceError) throw sourceError;
+
+      const { data: gateRows } = await supabase
+        .from("feed_gates")
+        .select("gate_type,config,is_enabled")
+        .eq("feed_id", feedRow.id)
+        .eq("is_enabled", true);
 
       const includeKeywords: string[] = (ruleRow?.include_keywords ?? []).map((k: string) => k.trim()).filter(Boolean);
       const excludeKeywords: string[] = (ruleRow?.exclude_keywords ?? []).map((k: string) => k.trim()).filter(Boolean);
@@ -466,7 +628,12 @@ export default function FeedsPage() {
 
       let candidatePosts = (posts ?? []) as any[];
 
-      if (ruleRow?.submit_enabled && ruleRow.submit_tag) {
+      const submitTags = (gateRows ?? [])
+        .filter((gate: any) => gate.gate_type === "hashtag_opt_in")
+        .map((gate: any) => String(gate.config?.submission_tag ?? "").trim())
+        .filter(Boolean);
+
+      if (submitTags.length) {
         let submitQuery = supabase
           .from("indexed_posts")
           .select("uri,created_at,text,author_did")
@@ -474,7 +641,7 @@ export default function FeedsPage() {
           .order("uri", { ascending: false })
           .limit(50);
         if (ruleRow?.lang) submitQuery = submitQuery.eq("lang", ruleRow.lang);
-        submitQuery = submitQuery.ilike("text", `%${ruleRow.submit_tag}%`);
+        submitQuery = submitQuery.ilike("text", `%${submitTags[0]}%`);
         const { data: submitPosts, error: submitError } = await submitQuery;
         if (submitError) throw submitError;
         const combined = [...candidatePosts, ...(submitPosts ?? [])];
@@ -498,9 +665,10 @@ export default function FeedsPage() {
           let included = passesInclude && passesExclude;
           let reason = "";
 
-          if (ruleRow?.submit_enabled && ruleRow.submit_tag && matchesTag(text, ruleRow.submit_tag, true)) {
+          const submitHit = submitTags.some((tag) => matchesTag(text, tag, true));
+          if (submitHit) {
             included = passesExclude;
-            reason = `Included via submit tag #${normalizeTag(ruleRow.submit_tag)}`;
+            reason = "Included via submit tag";
           } else if (!passesExclude) {
             reason = `Excluded: ${matchedExclude.join(", ")}`;
           } else if (!passesInclude) {
@@ -616,6 +784,8 @@ export default function FeedsPage() {
   useEffect(() => {
     if (selectedFeedId) {
       loadRulesAndSources(selectedFeedId);
+      loadGates(selectedFeedId);
+      loadJoinRequests(selectedFeedId);
     }
   }, [selectedFeedId]);
 
@@ -631,18 +801,27 @@ export default function FeedsPage() {
     setActiveTab("basics");
   }, [selectedFeed]);
 
+  useEffect(() => {
+    if (!gateForm && gates.length) return;
+  }, [gateForm, gates]);
+
   if (loading) return <LoadingState label="Loading feeds" />;
   if (error) return <ErrorState title="Feeds unavailable" subtitle={error} onRetry={loadFeeds} />;
 
   const feedLabel = selectedFeed?.title ?? selectedFeed?.display_name ?? selectedFeed?.slug ?? "";
 
-  const joinPreview = optInTag
-    ? `To join, post a message with #${normalizeTag(optInTag)} and mention the BA6 join account.`
+  const gateJoinPreview = gateForm?.enrollmentTag
+    ? `To join, post a message with #${normalizeTag(gateForm.enrollmentTag)}${
+        gateForm.requireMention && gateForm.joinAccount ? ` and mention ${gateForm.joinAccount}` : ""
+      }.`
     : "Add an enrollment tag to generate join instructions.";
 
-  const submitPreview = submitTag
-    ? `To submit a single post, include #${normalizeTag(submitTag)} in the post text.`
+  const gateSubmitPreview = gateForm?.submissionTag
+    ? `To submit a single post, include #${normalizeTag(gateForm.submissionTag)} in the post text.`
     : "Add a submission tag to enable single-post submissions.";
+
+  const moderatedEnabled = gates.some((gate) => gate.gate_type === "hashtag_opt_in" && gate.mode === "moderated");
+  const pendingRequests = joinRequests.filter((req) => req.status === "pending");
 
   return (
     <div className="space-y-6">
@@ -667,7 +846,7 @@ export default function FeedsPage() {
           </div>
           <div className="rounded-xl border border-black/10 bg-white/70 p-3">
             <div className="text-xs font-semibold uppercase tracking-wide text-black/50">2. Sources</div>
-            <div className="mt-1">Choose curated accounts or opt-in tags.</div>
+            <div className="mt-1">Choose accounts and add gates.</div>
           </div>
           <div className="rounded-xl border border-black/10 bg-white/70 p-3">
             <div className="text-xs font-semibold uppercase tracking-wide text-black/50">3. Rules</div>
@@ -798,7 +977,7 @@ export default function FeedsPage() {
       {!selectedFeed ? (
         <Card>
           <div className="text-sm font-semibold uppercase tracking-wide text-black/50">Select a feed</div>
-          <div className="mt-2 text-sm text-black/60">Choose a feed above to configure sources, rules, and publishing.</div>
+          <div className="mt-2 text-sm text-black/60">Choose a feed above to configure sources, gates, rules, and publishing.</div>
         </Card>
       ) : (
         <div className="space-y-4">
@@ -830,6 +1009,7 @@ export default function FeedsPage() {
               ["basics", "Basics"],
               ["sources", "Sources"],
               ["rules", "Rules"],
+              ["gating", "Gating"],
               ["publish", "Publish & Test"]
             ] as [TabKey, string][]).map(([key, label]) => (
               <Button
@@ -879,144 +1059,57 @@ export default function FeedsPage() {
           {activeTab === "sources" && (
             <Card>
               <div className="text-sm font-semibold uppercase tracking-wide text-black/50">Sources</div>
-              <div className="mt-2 text-xs text-black/50">Choose how accounts are enrolled into this feed.</div>
+              <div className="mt-2 text-xs text-black/50">Curate which accounts this feed watches.</div>
 
               <div className="mt-4 grid gap-4">
                 <div>
-                  <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Source strategy</label>
-                  <Select
-                    value={sourceStrategy}
-                    onChange={(e) => setSourceStrategy(e.target.value as "curated" | "opt_in")}
-                    className="min-h-[44px]"
-                  >
-                    <option value="curated">Curated list (manual)</option>
-                    <option value="opt_in">Opt-in via hashtag</option>
-                  </Select>
-                  <div className="mt-1 text-[11px] text-black/40">
-                    Curated lists are controlled by you. Opt-in allows accounts to enroll themselves.
+                  <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Add from connected account</label>
+                  <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <Select
+                      value={sourceAccountDid}
+                      onChange={(e) => setSourceAccountDid(e.target.value)}
+                      className="min-h-[44px]"
+                    >
+                      {accounts.length === 0 ? (
+                        <option value="">No connected accounts</option>
+                      ) : (
+                        accounts.map((account) => (
+                          <option key={account.account_did} value={account.account_did}>
+                            {account.handle ?? account.account_did}
+                          </option>
+                        ))
+                      )}
+                    </Select>
+                    <Button
+                      size="sm"
+                      onClick={() => addSource(sourceAccountDid)}
+                      disabled={!sourceAccountDid || addingSource}
+                      className="w-full sm:w-auto"
+                    >
+                      {addingSource ? "Adding..." : "Add"}
+                    </Button>
                   </div>
                 </div>
 
-                {sourceStrategy === "curated" ? (
-                  <div className="grid gap-4">
-                    <div>
-                      <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Add from connected account</label>
-                      <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
-                        <Select
-                          value={sourceAccountDid}
-                          onChange={(e) => setSourceAccountDid(e.target.value)}
-                          className="min-h-[44px]"
-                        >
-                          {accounts.length === 0 ? (
-                            <option value="">No connected accounts</option>
-                          ) : (
-                            accounts.map((account) => (
-                              <option key={account.account_did} value={account.account_did}>
-                                {account.handle ?? account.account_did}
-                              </option>
-                            ))
-                          )}
-                        </Select>
-                        <Button
-                          size="sm"
-                          onClick={() => addSource(sourceAccountDid)}
-                          disabled={!sourceAccountDid || addingSource}
-                          className="w-full sm:w-auto"
-                        >
-                          {addingSource ? "Adding..." : "Add"}
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Add by handle or DID</label>
-                      <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
-                        <Input
-                          placeholder="handle.bsky.social or did:plc..."
-                          value={newSource}
-                          onChange={(e) => setNewSource(e.target.value)}
-                        />
-                        <Button
-                          size="sm"
-                          onClick={() => addSource(newSource)}
-                          disabled={!newSource.trim() || addingSource}
-                          className="w-full sm:w-auto"
-                        >
-                          {addingSource ? "Adding..." : "Add"}
-                        </Button>
-                      </div>
-                      <div className="mt-1 text-[11px] text-black/40">Handles will be resolved to DIDs automatically.</div>
-                    </div>
+                <div>
+                  <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Add by handle or DID</label>
+                  <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <Input
+                      placeholder="handle.bsky.social or did:plc..."
+                      value={newSource}
+                      onChange={(e) => setNewSource(e.target.value)}
+                    />
+                    <Button
+                      size="sm"
+                      onClick={() => addSource(newSource)}
+                      disabled={!newSource.trim() || addingSource}
+                      className="w-full sm:w-auto"
+                    >
+                      {addingSource ? "Adding..." : "Add"}
+                    </Button>
                   </div>
-                ) : (
-                  <div className="grid gap-4 rounded-xl border border-black/10 bg-white/70 p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <div className="text-xs font-semibold uppercase tracking-wide text-black/50">Opt-in enrollment</div>
-                        <div className="text-xs text-black/50">Allow others to join this feed via a tag.</div>
-                      </div>
-                      <label className="inline-flex items-center gap-2 text-xs text-black/60">
-                        <input
-                          type="checkbox"
-                          checked={optInEnabled}
-                          onChange={(e) => setOptInEnabled(e.target.checked)}
-                          className="h-4 w-4"
-                        />
-                        Enable opt-in
-                      </label>
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Enrollment tag</label>
-                      <Input
-                        placeholder="AddToSystems"
-                        value={optInTag}
-                        onChange={(e) => setOptInTag(e.target.value)}
-                      />
-                      <div className="mt-1 text-[11px] text-black/40">Store without #. Default is case-insensitive.</div>
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Enrollment mode</label>
-                      <Select
-                        value={optInMode}
-                        onChange={(e) => setOptInMode(e.target.value as "public" | "moderated")}
-                        className="min-h-[44px]"
-                      >
-                        <option value="public">Public (auto-approve)</option>
-                        <option value="moderated">Moderated (requires approval)</option>
-                      </Select>
-                    </div>
-                    <div className="rounded-lg border border-black/10 bg-white/80 p-3 text-xs text-black/60">
-                      {joinPreview}
-                    </div>
-                    <div className="border-t border-black/10 pt-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <div className="text-xs font-semibold uppercase tracking-wide text-black/50">Submission tag</div>
-                          <div className="text-xs text-black/50">Allow single posts to be submitted via tag.</div>
-                        </div>
-                        <label className="inline-flex items-center gap-2 text-xs text-black/60">
-                          <input
-                            type="checkbox"
-                            checked={submitEnabled}
-                            onChange={(e) => setSubmitEnabled(e.target.checked)}
-                            className="h-4 w-4"
-                          />
-                          Enable submission
-                        </label>
-                      </div>
-                      <div className="mt-2">
-                        <Input
-                          placeholder="SubmitSystems"
-                          value={submitTag}
-                          onChange={(e) => setSubmitTag(e.target.value)}
-                        />
-                      </div>
-                      <div className="mt-2 rounded-lg border border-black/10 bg-white/80 p-3 text-xs text-black/60">
-                        {submitPreview}
-                      </div>
-                    </div>
-                  </div>
-                )}
+                  <div className="mt-1 text-[11px] text-black/40">Handles will be resolved to DIDs automatically.</div>
+                </div>
 
                 <div>
                   <div className="text-xs font-semibold uppercase tracking-wide text-black/50">Current sources</div>
@@ -1045,10 +1138,6 @@ export default function FeedsPage() {
                     </ul>
                   )}
                 </div>
-
-                <Button size="sm" onClick={saveRules} className="w-full sm:w-auto">
-                  Save source settings
-                </Button>
               </div>
             </Card>
           )}
@@ -1106,6 +1195,261 @@ export default function FeedsPage() {
             </Card>
           )}
 
+          {activeTab === "gating" && (
+            <div className="space-y-6">
+              <Card>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <div className="text-sm font-semibold uppercase tracking-wide text-black/50">Gating methods</div>
+                    <div className="text-xs text-black/50">Add join and submission gates for this feed.</div>
+                  </div>
+                  <Button size="sm" onClick={() => setGateForm(defaultGateForm("hashtag_opt_in"))}>
+                    Add gate
+                  </Button>
+                </div>
+
+                {loadingGates ? (
+                  <div className="mt-4 text-xs text-black/50">Loading gates...</div>
+                ) : gates.length === 0 ? (
+                  <div className="mt-4 text-xs text-black/50">No gates yet. Add a gate to enable joins or submissions.</div>
+                ) : (
+                  <div className="mt-4 space-y-3">
+                    {gates.map((gate) => (
+                      <div key={gate.id} className="rounded-xl border border-black/10 bg-white/70 px-4 py-3">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-semibold text-ink">{gate.gate_type.replace(/_/g, " ")}</div>
+                            <div className="text-xs text-black/50">
+                              {gate.mode ?? "public"} · {gate.is_enabled ? "Enabled" : "Disabled"}
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => {
+                                const config = gate.config ?? {};
+                                if (gate.gate_type === "hashtag_opt_in") {
+                                  setGateForm({
+                                    id: gate.id,
+                                    gateType: "hashtag_opt_in",
+                                    mode: (gate.mode ?? "public") as "public" | "moderated",
+                                    isEnabled: gate.is_enabled,
+                                    enrollmentTag: config.enrollment_tag ?? "",
+                                    submissionTag: config.submission_tag ?? "",
+                                    requireMention: Boolean(config.require_mention),
+                                    joinAccount: config.join_account ?? "",
+                                    tokenChain: "base",
+                                    tokenAddress: "",
+                                    minBalance: "1",
+                                    gateAction: "join"
+                                  });
+                                } else {
+                                  setGateForm({
+                                    id: gate.id,
+                                    gateType: "token_gate",
+                                    mode: "public",
+                                    isEnabled: gate.is_enabled,
+                                    enrollmentTag: "",
+                                    submissionTag: "",
+                                    requireMention: false,
+                                    joinAccount: "",
+                                    tokenChain: config.chain ?? "base",
+                                    tokenAddress: config.token ?? "",
+                                    minBalance: String(config.min_balance ?? "1"),
+                                    gateAction: config.action ?? "join"
+                                  });
+                                }
+                              }}
+                            >
+                              Edit
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={() => deleteGate(gate.id)}>
+                              Remove
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+
+              {gateForm && (
+                <Card>
+                  <div className="text-sm font-semibold uppercase tracking-wide text-black/50">Configure gate</div>
+                  <div className="mt-4 grid gap-3">
+                    <div>
+                      <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Gate type</label>
+                      <Select
+                        value={gateForm.gateType}
+                        onChange={(e) => setGateForm({ ...gateForm, gateType: e.target.value as GateFormState["gateType"] })}
+                        className="min-h-[44px]"
+                      >
+                        <option value="hashtag_opt_in">Hashtag opt-in</option>
+                        <option value="token_gate">Token gate</option>
+                      </Select>
+                    </div>
+
+                    <label className="inline-flex items-center gap-2 text-xs text-black/60">
+                      <input
+                        type="checkbox"
+                        checked={gateForm.isEnabled}
+                        onChange={(e) => setGateForm({ ...gateForm, isEnabled: e.target.checked })}
+                        className="h-4 w-4"
+                      />
+                      Gate enabled
+                    </label>
+
+                    {gateForm.gateType === "hashtag_opt_in" ? (
+                      <div className="grid gap-3">
+                        <div>
+                          <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Mode</label>
+                          <Select
+                            value={gateForm.mode}
+                            onChange={(e) =>
+                              setGateForm({ ...gateForm, mode: e.target.value as GateFormState["mode"] })
+                            }
+                            className="min-h-[44px]"
+                          >
+                            <option value="public">Public (auto-approve)</option>
+                            <option value="moderated">Moderated (requires approval)</option>
+                          </Select>
+                        </div>
+                        <div>
+                          <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Enrollment tag</label>
+                          <Input
+                            placeholder="AddToX"
+                            value={gateForm.enrollmentTag}
+                            onChange={(e) => setGateForm({ ...gateForm, enrollmentTag: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Submission tag (optional)</label>
+                          <Input
+                            placeholder="SubmitX"
+                            value={gateForm.submissionTag}
+                            onChange={(e) => setGateForm({ ...gateForm, submissionTag: e.target.value })}
+                          />
+                        </div>
+                        <label className="inline-flex items-center gap-2 text-xs text-black/60">
+                          <input
+                            type="checkbox"
+                            checked={gateForm.requireMention}
+                            onChange={(e) => setGateForm({ ...gateForm, requireMention: e.target.checked })}
+                            className="h-4 w-4"
+                          />
+                          Require mention of BA6 join account
+                        </label>
+                        {gateForm.requireMention && (
+                          <Input
+                            placeholder="@join-account.bsky.social or did:plc..."
+                            value={gateForm.joinAccount}
+                            onChange={(e) => setGateForm({ ...gateForm, joinAccount: e.target.value })}
+                          />
+                        )}
+                        <div className="rounded-lg border border-black/10 bg-white/80 p-3 text-xs text-black/60">
+                          {gateJoinPreview}
+                        </div>
+                        <div className="rounded-lg border border-black/10 bg-white/80 p-3 text-xs text-black/60">
+                          {gateSubmitPreview}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="grid gap-3">
+                        <div>
+                          <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Chain</label>
+                          <Select
+                            value={gateForm.tokenChain}
+                            onChange={(e) =>
+                              setGateForm({ ...gateForm, tokenChain: e.target.value as GateFormState["tokenChain"] })
+                            }
+                            className="min-h-[44px]"
+                          >
+                            <option value="base">Base</option>
+                            <option value="solana">Solana</option>
+                          </Select>
+                        </div>
+                        <div>
+                          <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Token contract / mint</label>
+                          <Input
+                            placeholder="0x... or So111..."
+                            value={gateForm.tokenAddress}
+                            onChange={(e) => setGateForm({ ...gateForm, tokenAddress: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Minimum balance</label>
+                          <Input
+                            placeholder="1"
+                            value={gateForm.minBalance}
+                            onChange={(e) => setGateForm({ ...gateForm, minBalance: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-semibold uppercase tracking-wide text-black/50">Gate action</label>
+                          <Select
+                            value={gateForm.gateAction}
+                            onChange={(e) =>
+                              setGateForm({ ...gateForm, gateAction: e.target.value as GateFormState["gateAction"] })
+                            }
+                            className="min-h-[44px]"
+                          >
+                            <option value="join">Join</option>
+                            <option value="submit">Submit</option>
+                            <option value="premium_features">Premium features</option>
+                          </Select>
+                        </div>
+                        <div className="rounded-lg border border-black/10 bg-white/80 p-3 text-xs text-black/60">
+                          Token gates control BA6 actions (joining/submit), not viewing in Bluesky.
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <Button size="sm" onClick={saveGate} disabled={savingGate} className="w-full sm:w-auto">
+                        {savingGate ? "Saving..." : "Save gate"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setGateForm(null)}
+                        className="w-full sm:w-auto"
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              )}
+
+              {moderatedEnabled && (
+                <Card>
+                  <div className="text-sm font-semibold uppercase tracking-wide text-black/50">Join requests</div>
+                  {pendingRequests.length === 0 ? (
+                    <div className="mt-2 text-xs text-black/50">No pending requests.</div>
+                  ) : (
+                    <div className="mt-4 space-y-2">
+                      {pendingRequests.map((req) => (
+                        <div key={req.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-black/10 bg-white/70 px-3 py-2">
+                          <div className="text-xs text-black/70 break-all">{req.requester_did}</div>
+                          <div className="flex gap-2">
+                            <Button size="sm" variant="secondary" onClick={() => approveRequest(req.id)}>
+                              Approve
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={() => rejectRequest(req.id)}>
+                              Reject
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </Card>
+              )}
+            </div>
+          )}
+
           {activeTab === "publish" && (
             <div className="grid gap-6 lg:grid-cols-2">
               <Card>
@@ -1141,7 +1485,7 @@ export default function FeedsPage() {
                 <div className="mt-6 rounded-xl border border-black/10 bg-white/70 p-4 text-xs text-black/60">
                   <div className="font-semibold uppercase tracking-wide text-black/50">Empty feed?</div>
                   <ul className="mt-2 list-disc space-y-1 pl-4">
-                    <li>Make sure sources are configured (or opt-in tags are active).</li>
+                    <li>Make sure sources or gates are configured.</li>
                     <li>Check that posts are indexed (scheduled posts show instantly).</li>
                     <li>Verify include/exclude keywords match recent posts.</li>
                     <li>Use the test button to preview what the feed sees.</li>

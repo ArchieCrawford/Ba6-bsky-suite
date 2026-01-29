@@ -22,3 +22,11 @@ export function createSupabaseServerClient(accessToken?: string): SupabaseClient
       : undefined
   });
 }
+
+export function createSupabaseServiceClient(): SupabaseClient {
+  const supabaseUrl = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
+  const serviceKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
+  return createClient(supabaseUrl, serviceKey, {
+    auth: { persistSession: false, autoRefreshToken: false }
+  });
+}

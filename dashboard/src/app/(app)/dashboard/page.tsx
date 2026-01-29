@@ -99,7 +99,7 @@ export default function DashboardPage() {
   const connectedChips = useMemo(() => {
     const bluesky = accounts.length > 0;
     const solana = wallets.some((wallet) => wallet.chain === "solana");
-    const ethereum = wallets.some((wallet) => wallet.chain === "ethereum");
+    const ethereum = wallets.some((wallet) => wallet.chain === "evm" || wallet.chain === "ethereum");
     const magic = wallets.some((wallet) => wallet.provider === "magic");
     return [
       { label: "Bluesky", connected: bluesky },
