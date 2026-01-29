@@ -14,6 +14,8 @@ type EntitlementsPayload = {
   lookupKey?: string;
   feedId?: string;
   gateAction?: string;
+  targetType?: string;
+  targetId?: string;
 };
 
 export async function POST(request: Request) {
@@ -32,9 +34,13 @@ export async function POST(request: Request) {
     const body = (await request.json().catch(() => ({}))) as EntitlementsPayload;
     let lookupKey = typeof body.lookupKey === "string" ? body.lookupKey.trim() : "";
 
-    if (!lookupKey && body.feedId && body.gateAction) {
-      const gate = await getPayGateForAction(supa, body.feedId, body.gateAction);
-      lookupKey = typeof gate?.config?.lookup_key === "string" ? gate.config.lookup_key.trim() : "";
+    if (!lookupKey && (body.feedId || body.targetId) && body.gateAction) {
+      const targetType = body.targetType === "space" ? "space" : "feed";
+      const targetId = typeof body.targetId === "string" ? body.targetId : body.feedId;
+      if (typeof targetId === "string" && targetId) {
+        const gate = await getPayGateForAction(supa, targetId, body.gateAction, targetType);
+        lookupKey = typeof gate?.config?.lookup_key === "string" ? gate.config.lookup_key.trim() : "";
+      }
     }
 
     if (!lookupKey) {

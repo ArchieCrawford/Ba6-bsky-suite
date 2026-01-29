@@ -22,11 +22,18 @@ export const normalizeGateActions = (value: unknown): string[] => {
   return [];
 };
 
-export async function getPayGateForAction(supa: SupabaseClient, feedId: string, action: string) {
+export async function getPayGateForAction(
+  supa: SupabaseClient,
+  targetId: string,
+  action: string,
+  targetType: "feed" | "space" = "feed"
+) {
+  const targetColumn = targetType === "space" ? "space_id" : "feed_id";
   const { data, error } = await supa
     .from("feed_gates")
     .select("id,gate_type,config,is_enabled")
-    .eq("feed_id", feedId)
+    .eq(targetColumn, targetId)
+    .eq("target_type", targetType)
     .eq("gate_type", "pay_gate")
     .eq("is_enabled", true);
   if (error) throw error;
@@ -42,11 +49,18 @@ export async function getPayGateForAction(supa: SupabaseClient, feedId: string, 
   return null;
 }
 
-export async function getTokenGateForAction(supa: SupabaseClient, feedId: string, action: string) {
+export async function getTokenGateForAction(
+  supa: SupabaseClient,
+  targetId: string,
+  action: string,
+  targetType: "feed" | "space" = "feed"
+) {
+  const targetColumn = targetType === "space" ? "space_id" : "feed_id";
   const { data, error } = await supa
     .from("feed_gates")
     .select("id,gate_type,config,is_enabled")
-    .eq("feed_id", feedId)
+    .eq(targetColumn, targetId)
+    .eq("target_type", targetType)
     .eq("gate_type", "token_gate")
     .eq("is_enabled", true);
   if (error) throw error;
@@ -82,10 +96,12 @@ export const isGateAccessError = (err: unknown): err is GateAccessError => {
 export async function requireGateAccess(params: {
   supa: SupabaseClient;
   userId: string;
-  feedId: string;
+  targetId: string;
+  targetType?: "feed" | "space";
   action: string;
 }) {
-  const payGate = await getPayGateForAction(params.supa, params.feedId, params.action);
+  const targetType = params.targetType ?? "feed";
+  const payGate = await getPayGateForAction(params.supa, params.targetId, params.action, targetType);
   if (payGate) {
     const lookupKey =
       typeof payGate.config.lookup_key === "string" ? payGate.config.lookup_key.trim() : "";
@@ -98,8 +114,25 @@ export async function requireGateAccess(params: {
     }
   }
 
-  const tokenGate = await getTokenGateForAction(params.supa, params.feedId, params.action);
+  const tokenGate = await getTokenGateForAction(params.supa, params.targetId, params.action, targetType);
   if (tokenGate) {
+    const { data: wallets } = await params.supa
+      .from("wallets")
+      .select("id")
+      .eq("user_id", params.userId);
+    const walletIds = (wallets ?? []).map((row: any) => row.id);
+    if (!walletIds.length) {
+      throw new GateAccessError(401, "wallet_required", "Connect a wallet to continue");
+    }
+    const { data: verified } = await params.supa
+      .from("wallet_verifications")
+      .select("id,verified_at")
+      .in("wallet_id", walletIds)
+      .not("verified_at", "is", null)
+      .limit(1);
+    if (!verified || verified.length === 0) {
+      throw new GateAccessError(403, "wallet_not_verified", "Verify your wallet to continue");
+    }
     throw new GateAccessError(501, "token_gate_not_implemented", "Token gate not implemented");
   }
 }

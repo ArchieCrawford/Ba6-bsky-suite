@@ -19,7 +19,7 @@ function getBearerToken(request: Request) {
   return header.slice(7);
 }
 
-export async function GET(request: Request, context: { params: Promise<{ feedId: string }> }) {
+export async function GET(request: Request, context: { params: Promise<{ spaceId: string }> }) {
   try {
     const token = getBearerToken(request);
     if (!token) return NextResponse.json({ error: "Missing auth token" }, { status: 401 });
@@ -30,12 +30,12 @@ export async function GET(request: Request, context: { params: Promise<{ feedId:
       return NextResponse.json({ error: "Invalid auth token" }, { status: 401 });
     }
 
-    const { feedId } = await context.params;
+    const { spaceId } = await context.params;
     const { data, error } = await supa
       .from("feed_gates")
-      .select("id,feed_id,gate_type,mode,config,is_enabled,created_at,updated_at")
-      .eq("feed_id", feedId)
-      .eq("target_type", "feed")
+      .select("id,space_id,gate_type,mode,config,is_enabled,created_at,updated_at")
+      .eq("space_id", spaceId)
+      .eq("target_type", "space")
       .order("created_at", { ascending: true });
     if (error) throw error;
 
@@ -45,7 +45,7 @@ export async function GET(request: Request, context: { params: Promise<{ feedId:
   }
 }
 
-export async function POST(request: Request, context: { params: Promise<{ feedId: string }> }) {
+export async function POST(request: Request, context: { params: Promise<{ spaceId: string }> }) {
   try {
     const token = getBearerToken(request);
     if (!token) return NextResponse.json({ error: "Missing auth token" }, { status: 401 });
@@ -56,7 +56,7 @@ export async function POST(request: Request, context: { params: Promise<{ feedId
       return NextResponse.json({ error: "Invalid auth token" }, { status: 401 });
     }
 
-    const { feedId } = await context.params;
+    const { spaceId } = await context.params;
     const body = (await request.json().catch(() => ({}))) as GatePayload;
     const gateType = typeof body.gateType === "string" ? body.gateType : "";
 
@@ -65,8 +65,8 @@ export async function POST(request: Request, context: { params: Promise<{ feedId
     }
 
     const payload = {
-      feed_id: feedId,
-      target_type: "feed",
+      space_id: spaceId,
+      target_type: "space",
       gate_type: gateType,
       mode: body.mode ?? null,
       config: body.config ?? {},
@@ -78,8 +78,8 @@ export async function POST(request: Request, context: { params: Promise<{ feedId
         .from("feed_gates")
         .update(payload)
         .eq("id", body.gateId)
-        .eq("feed_id", feedId)
-        .eq("target_type", "feed");
+        .eq("space_id", spaceId)
+        .eq("target_type", "space");
       if (error) throw error;
       return NextResponse.json({ ok: true });
     }
@@ -93,7 +93,7 @@ export async function POST(request: Request, context: { params: Promise<{ feedId
   }
 }
 
-export async function DELETE(request: Request, context: { params: Promise<{ feedId: string }> }) {
+export async function DELETE(request: Request, context: { params: Promise<{ spaceId: string }> }) {
   try {
     const token = getBearerToken(request);
     if (!token) return NextResponse.json({ error: "Missing auth token" }, { status: 401 });
@@ -104,7 +104,7 @@ export async function DELETE(request: Request, context: { params: Promise<{ feed
       return NextResponse.json({ error: "Invalid auth token" }, { status: 401 });
     }
 
-    const { feedId } = await context.params;
+    const { spaceId } = await context.params;
     const body = (await request.json().catch(() => ({}))) as { gateId?: string };
     if (!body.gateId) {
       return NextResponse.json({ error: "Missing gate id" }, { status: 400 });
@@ -114,8 +114,8 @@ export async function DELETE(request: Request, context: { params: Promise<{ feed
       .from("feed_gates")
       .delete()
       .eq("id", body.gateId)
-      .eq("feed_id", feedId)
-      .eq("target_type", "feed");
+      .eq("space_id", spaceId)
+      .eq("target_type", "space");
     if (error) throw error;
 
     return NextResponse.json({ ok: true });

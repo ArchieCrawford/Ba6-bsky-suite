@@ -44,7 +44,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing feed or subject" }, { status: 400 });
     }
 
-    await requireGateAccess({ supa, userId: data.user.id, feedId, action: "follow_via_ba6" });
+    await requireGateAccess({ supa, userId: data.user.id, targetId: feedId, action: "follow_via_ba6" });
 
     const { agent, account } = await loginAgentForUser(supa, data.user.id);
     const now = new Date().toISOString();

@@ -6,6 +6,9 @@ export const runtime = "nodejs";
 
 type CheckoutPayload = {
   feed_id?: string;
+  space_id?: string;
+  target_id?: string;
+  target_type?: string;
   gate_action?: string;
 };
 
@@ -35,14 +38,16 @@ export async function POST(request: Request) {
     }
 
     const body = (await request.json().catch(() => ({}))) as CheckoutPayload;
-    const feedId = typeof body.feed_id === "string" ? body.feed_id : "";
+    const targetType = body.target_type === "space" ? "space" : "feed";
+    const targetIdRaw = targetType === "space" ? body.target_id ?? body.space_id : body.target_id ?? body.feed_id;
+    const targetId = typeof targetIdRaw === "string" ? targetIdRaw : "";
     const gateAction = typeof body.gate_action === "string" ? body.gate_action : "";
 
-    if (!feedId || !gateAction) {
-      return NextResponse.json({ error: "Missing feed or gate action" }, { status: 400 });
+    if (!targetId || !gateAction) {
+      return NextResponse.json({ error: "Missing target or gate action" }, { status: 400 });
     }
 
-    const payGate = await getPayGateForAction(supa, feedId, gateAction);
+    const payGate = await getPayGateForAction(supa, targetId, gateAction, targetType);
     if (!payGate) {
       return NextResponse.json({ error: "No active pay gate for this action" }, { status: 404 });
     }
@@ -59,15 +64,24 @@ export async function POST(request: Request) {
     const customerId = await ensureStripeCustomerId(data.user.id, data.user.email);
     const stripe = getStripe();
     const origin = getSiteUrl();
+    const successPath =
+      targetType === "space"
+        ? `/spaces/${encodeURIComponent(targetId)}?checkout=success`
+        : `/feeds?feed=${encodeURIComponent(targetId)}&checkout=success`;
+    const cancelPath =
+      targetType === "space"
+        ? `/spaces/${encodeURIComponent(targetId)}?checkout=cancel`
+        : `/feeds?feed=${encodeURIComponent(targetId)}&checkout=cancel`;
 
     const session = await stripe.checkout.sessions.create({
       mode: billingMode,
       customer: customerId,
       line_items: [{ price: priceId, quantity: 1 }],
-      success_url: `${origin}/feeds?feed=${encodeURIComponent(feedId)}&checkout=success`,
-      cancel_url: `${origin}/feeds?feed=${encodeURIComponent(feedId)}&checkout=cancel`,
+      success_url: `${origin}${successPath}`,
+      cancel_url: `${origin}${cancelPath}`,
       metadata: {
-        feed_id: feedId,
+        target_type: targetType,
+        target_id: targetId,
         gate_action: gateAction,
         lookup_key: lookupKey,
         supabase_user_id: data.user.id

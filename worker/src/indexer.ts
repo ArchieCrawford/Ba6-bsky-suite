@@ -79,6 +79,7 @@ async function fetchHashtagGates() {
     .from("feed_gates")
     .select("feed_id,gate_type,mode,config,is_enabled")
     .eq("gate_type", "hashtag_opt_in")
+    .eq("target_type", "feed")
     .eq("is_enabled", true);
   if (error) throw error;
   return (data ?? [])

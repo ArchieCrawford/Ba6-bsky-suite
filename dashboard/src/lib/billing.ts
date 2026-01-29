@@ -41,13 +41,16 @@ const normalizeGateActions = (value: unknown): string[] => {
 
 export async function getPayGateForAction(
   supa: SupabaseClient,
-  feedId: string,
-  gateAction: string
+  targetId: string,
+  gateAction: string,
+  targetType: "feed" | "space" = "feed"
 ) {
+  const targetColumn = targetType === "space" ? "space_id" : "feed_id";
   const { data, error } = await supa
     .from("feed_gates")
     .select("id,config,is_enabled")
-    .eq("feed_id", feedId)
+    .eq(targetColumn, targetId)
+    .eq("target_type", targetType)
     .eq("gate_type", "pay_gate")
     .eq("is_enabled", true);
   if (error) throw error;

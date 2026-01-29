@@ -116,6 +116,7 @@ async function getFeedGates(feedId: string) {
     .from("feed_gates")
     .select("gate_type,mode,config,is_enabled")
     .eq("feed_id", feedId)
+    .eq("target_type", "feed")
     .eq("is_enabled", true);
   if (error) throw error;
   return (data ?? []) as { gate_type: string; mode: string | null; config: any; is_enabled: boolean }[];
