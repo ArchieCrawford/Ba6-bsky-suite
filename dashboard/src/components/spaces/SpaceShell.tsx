@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -29,6 +30,7 @@ export function SpaceShell({ spaceId, active, children }: SpaceShellProps) {
   const { space, membership, loading, error, refresh } = useSpace(spaceId);
   const [inviteCode, setInviteCode] = useState("");
   const [joining, setJoining] = useState(false);
+  const router = useRouter();
 
   const tabs = useMemo(
     () => [
@@ -64,6 +66,15 @@ export function SpaceShell({ spaceId, active, children }: SpaceShellProps) {
       setJoining(false);
     }
   };
+
+  useEffect(() => {
+    const isUuid =
+      typeof spaceId === "string" &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(spaceId);
+    if (!isUuid) return;
+    if (!space?.slug || space.slug === spaceId) return;
+    router.replace(`/spaces/${space.slug}/${active}`);
+  }, [spaceId, space?.slug, active, router]);
 
   if (loading) {
     return (

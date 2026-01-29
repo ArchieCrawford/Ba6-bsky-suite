@@ -223,7 +223,7 @@ export default function SpacesPage() {
                 <p className="text-sm text-muted-foreground">{space.description}</p>
               ) : null}
               <div className="pt-2">
-                <Link href={`/spaces/${space.id}/chat`}>
+                <Link href={`/spaces/${space.slug}/chat`}>
                   <Button variant="secondary">Open space</Button>
                 </Link>
               </div>

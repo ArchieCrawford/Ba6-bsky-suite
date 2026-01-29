@@ -117,7 +117,7 @@ export default function SpacesDiscoverPage() {
                 <div className="mt-1 break-all">Share: {`/spaces/${space.slug}/chat`}</div>
               </div>
               <div className="flex flex-wrap gap-2 pt-2">
-                <Link href={`/spaces/${space.id}/chat`}>
+                <Link href={`/spaces/${space.slug}/chat`}>
                   <Button variant="secondary">Open space</Button>
                 </Link>
                 <Button
