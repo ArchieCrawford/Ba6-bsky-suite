@@ -44,6 +44,7 @@ export function RootNavigator() {
   return (
     <NavigationContainer>
       <Drawer.Navigator
+        useLegacyImplementation={false}
         screenOptions={{
           headerShown: false,
           drawerType: "front",

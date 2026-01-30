@@ -1,11 +1,12 @@
 import { ENV } from "./env";
-import { supabase } from "./supabase";
+import { getSupabase } from "./supabase";
 
 export type ApiResult<T> =
   | { ok: true; data: T }
   | { ok: false; status: number; error: string; payload?: any };
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<ApiResult<T>> {
+  const supabase = getSupabase();
   const base = ENV.BA6_API_BASE.replace(/\/+$/, "");
   const url = `${base}${path.startsWith("/") ? path : `/${path}`}`;
 

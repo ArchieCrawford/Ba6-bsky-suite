@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { supabase } from "../lib/supabase";
+import { getSupabase } from "../lib/supabase";
 import { fetchIdentity, IdentityRow } from "../lib/identity";
 import { Space } from "../types/models";
 import { apiFetch } from "../lib/api";
@@ -26,6 +26,7 @@ const mockSpaces: Space[] = [
 ];
 
 export function AppStateProvider({ children }: { children: React.ReactNode }) {
+  const supabase = getSupabase();
   const [ready, setReady] = useState(false);
   const [hasSession, setHasSession] = useState(false);
   const [email, setEmail] = useState<string | null>(null);

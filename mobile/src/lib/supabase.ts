@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import * as SecureStore from "expo-secure-store";
 import { ENV } from "./env";
 
@@ -8,11 +8,23 @@ const storage = {
   removeItem: (key: string) => SecureStore.deleteItemAsync(key)
 };
 
-export const supabase = createClient(ENV.SUPABASE_URL, ENV.SUPABASE_ANON_KEY, {
-  auth: {
-    storage,
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: false
+let client: SupabaseClient | null = null;
+
+export function getSupabase() {
+  if (!client) {
+    const url = ENV.SUPABASE_URL;
+    const key = ENV.SUPABASE_ANON_KEY;
+    if (!url || !key) {
+      throw new Error("Supabase env missing");
+    }
+    client = createClient(url, key, {
+      auth: {
+        storage,
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: false
+      }
+    });
   }
-});
+  return client;
+}

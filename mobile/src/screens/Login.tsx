@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { View, Text, TextInput, Pressable } from "react-native";
 import * as Haptics from "expo-haptics";
-import { supabase } from "../lib/supabase";
+import { getSupabase } from "../lib/supabase";
 
 export function Login() {
   const [email, setEmail] = useState("");
@@ -10,6 +10,7 @@ export function Login() {
   const sendLink = async () => {
     if (!email.trim()) return;
     await Haptics.selectionAsync();
+    const supabase = getSupabase();
     const { error } = await supabase.auth.signInWithOtp({ email: email.trim() });
     if (!error) setSent(true);
   };
