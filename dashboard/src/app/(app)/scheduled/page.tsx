@@ -142,7 +142,12 @@ export default function ScheduledPage() {
   }, [rows, search, statusFilter, sortKey]);
 
   const missingAccountQueued = useMemo(
-    () => rows.some((row) => row.status === "queued" && !row.account_did),
+    () =>
+      rows.some(
+        (row) =>
+          (!row.account_did && row.status === "queued") ||
+          row.last_error === "No connected Bluesky account"
+      ),
     [rows]
   );
 
@@ -209,7 +214,7 @@ export default function ScheduledPage() {
 
       {missingAccountQueued && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-          Connect a Bluesky account to post. This item will stay queued until linked.
+          Connect a Bluesky account to post. Items without an account will be marked failed until linked and retried.
         </div>
       )}
       <Card className="flex flex-col gap-3 sm:flex-row sm:items-center">

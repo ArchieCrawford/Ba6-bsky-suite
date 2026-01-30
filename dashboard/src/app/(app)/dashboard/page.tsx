@@ -153,7 +153,24 @@ export default function DashboardPage() {
       if (eventRes.error) throw eventRes.error;
       if (accountRes.error) throw accountRes.error;
       if (walletRes.error) throw walletRes.error;
-      if (feedRes.error) throw feedRes.error;
+      if (feedRes.error) {
+        const message = String(feedRes.error.message ?? "");
+        if (message.includes("column") && message.includes("title")) {
+          const { data: fallbackFeeds, error: fallbackError } = await supabase
+            .from("feeds")
+            .select("id,slug,is_enabled")
+            .order("created_at", { ascending: false });
+          if (fallbackError) throw fallbackError;
+          feedRes.data = (fallbackFeeds ?? []).map((row: any) => ({
+            ...row,
+            title: null,
+            display_name: null,
+            description: null
+          }));
+        } else {
+          throw feedRes.error;
+        }
+      }
       if (draftCountRes.error) throw draftCountRes.error;
 
       const counts = (scheduledRes.data ?? []).reduce<Record<string, number>>((acc, row: any) => {

@@ -145,12 +145,13 @@ async function markPosted(scheduledPostId: string, uri: string, cid: string) {
     .eq("id", scheduledPostId);
 }
 
-async function markMissingAccount(scheduledPostId: string) {
+async function markMissingAccount(scheduledPostId: string, maxAttempts: number) {
   const now = new Date().toISOString();
   await supa
     .from("scheduled_posts")
     .update({
-      status: "queued",
+      status: "failed",
+      attempt_count: maxAttempts,
       last_error: "No connected Bluesky account",
       locked_at: null,
       locked_by: null,
@@ -240,7 +241,7 @@ async function loopOnce(): Promise<{ scheduled: number; ai: number }> {
           attempt,
           error_message: "No connected Bluesky account"
         });
-        await markMissingAccount(job.id);
+        await markMissingAccount(job.id, job.max_attempts);
         log("warn", "missing_account", { scheduled_post_id: job.id });
         continue;
       }

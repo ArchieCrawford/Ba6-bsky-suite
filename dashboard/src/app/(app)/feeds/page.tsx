@@ -270,7 +270,29 @@ export default function FeedsPage() {
         .from("feeds")
         .select("id,slug,title,display_name,description,is_enabled")
         .order("created_at", { ascending: false });
-      if (feedError) throw feedError;
+      if (feedError) {
+        const message = String(feedError.message ?? "");
+        if (message.includes("column") && message.includes("title")) {
+          const { data: fallbackData, error: fallbackError } = await supabase
+            .from("feeds")
+            .select("id,slug,is_enabled")
+            .order("created_at", { ascending: false });
+          if (fallbackError) throw fallbackError;
+          const feedRows = (fallbackData ?? []).map((row: any) => ({
+            ...row,
+            title: null,
+            display_name: null,
+            description: null
+          })) as FeedRow[];
+          setFeeds(feedRows);
+          if (!selectedFeedId && feedRows.length) {
+            setSelectedFeedId(feedRows[0].id);
+            setTestSlug(feedRows[0].slug);
+          }
+          return;
+        }
+        throw feedError;
+      }
       const feedRows = (data ?? []) as FeedRow[];
       setFeeds(feedRows);
       if (!selectedFeedId && feedRows.length) {
