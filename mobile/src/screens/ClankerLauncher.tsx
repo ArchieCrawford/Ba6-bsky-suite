@@ -3,7 +3,7 @@ import { View, Text, Pressable } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import { ENV } from "../lib/env";
 
-export function ClankerLauncher() {
+export function ClankerLauncher({ navigation }: { navigation?: any }) {
   const url = useMemo(() => {
     const raw = ENV.DASHBOARD_URL || ENV.BA6_API_BASE || "";
     const base = raw.endsWith("/") ? raw.slice(0, -1) : raw;
@@ -16,35 +16,61 @@ export function ClankerLauncher() {
   }
 
   return (
-    <View style={{ flex: 1, padding: 20, justifyContent: "center" }}>
-      <Text style={{ fontSize: 22, fontWeight: "700", marginBottom: 8 }}>
-        Clanker Token Launcher
-      </Text>
-      <Text style={{ opacity: 0.7, marginBottom: 16 }}>
-        This opens the BA6 dashboard launcher module in an in-app browser.
-      </Text>
-      <Pressable
-        onPress={open}
-        disabled={!url}
+    <View style={{ flex: 1, padding: 20 }}>
+      <View
         style={{
-          backgroundColor: url ? "rgba(155,135,245,0.25)" : "rgba(0,0,0,0.08)",
-          paddingVertical: 14,
-          paddingHorizontal: 16,
-          borderRadius: 16,
-          borderWidth: 1,
-          borderColor: url ? "rgba(155,135,245,0.45)" : "rgba(0,0,0,0.12)",
+          marginTop: 32,
+          marginBottom: 18,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between"
         }}
       >
-        <Text style={{ fontWeight: "700", textAlign: "center" }}>
-          Open Launcher
-        </Text>
-      </Pressable>
+        <Pressable
+          onPress={() => navigation?.navigate?.("ConsoleHome")}
+          style={{
+            paddingHorizontal: 14,
+            paddingVertical: 8,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: "rgba(0,0,0,0.12)",
+            backgroundColor: "rgba(255,255,255,0.9)"
+          }}
+        >
+          <Text style={{ fontWeight: "700" }}>Back</Text>
+        </Pressable>
+      </View>
 
-      {!url ? (
-        <Text style={{ marginTop: 14, fontSize: 12, opacity: 0.6 }}>
-          Set EXPO_PUBLIC_DASHBOARD_URL (or EXPO_PUBLIC_BA6_API_BASE) to enable this.
+      <View style={{ flex: 1, justifyContent: "center" }}>
+        <Text style={{ fontSize: 22, fontWeight: "700", marginBottom: 8 }}>
+          Clanker Token Launcher
         </Text>
-      ) : null}
+        <Text style={{ opacity: 0.7, marginBottom: 16 }}>
+          This opens the BA6 dashboard launcher module in an in-app browser.
+        </Text>
+        <Pressable
+          onPress={open}
+          disabled={!url}
+          style={{
+            backgroundColor: url ? "rgba(155,135,245,0.25)" : "rgba(0,0,0,0.08)",
+            paddingVertical: 14,
+            paddingHorizontal: 16,
+            borderRadius: 16,
+            borderWidth: 1,
+            borderColor: url ? "rgba(155,135,245,0.45)" : "rgba(0,0,0,0.12)"
+          }}
+        >
+          <Text style={{ fontWeight: "700", textAlign: "center" }}>
+            Open Launcher
+          </Text>
+        </Pressable>
+
+        {!url ? (
+          <Text style={{ marginTop: 14, fontSize: 12, opacity: 0.6 }}>
+            Set EXPO_PUBLIC_DASHBOARD_URL (or EXPO_PUBLIC_BA6_API_BASE) to enable this.
+          </Text>
+        ) : null}
+      </View>
     </View>
   );
 }

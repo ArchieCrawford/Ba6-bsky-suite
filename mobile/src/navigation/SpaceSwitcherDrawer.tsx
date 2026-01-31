@@ -62,6 +62,54 @@ export function SpaceSwitcherDrawer(props: DrawerContentComponentProps) {
           <Text style={{ fontSize: 22 }}>+</Text>
         </View>
       </Pressable>
+
+      <Pressable
+        onPress={async () => {
+          await Haptics.selectionAsync();
+          props.navigation.closeDrawer();
+          props.navigation.navigate("Main" as never, { screen: "ConsoleHome" } as never);
+        }}
+        style={{ marginBottom: 16 }}
+      >
+        <View
+          style={{
+            width: 52,
+            height: 52,
+            borderRadius: 26,
+            borderWidth: 1,
+            borderColor: "rgba(0,0,0,0.12)",
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "rgba(0,0,0,0.06)"
+          }}
+        >
+          <Text style={{ fontSize: 12, fontWeight: "800" }}>BA6</Text>
+        </View>
+      </Pressable>
+
+      <Pressable
+        onPress={async () => {
+          await Haptics.selectionAsync();
+          props.navigation.closeDrawer();
+          props.navigation.navigate("Main" as never, { screen: "ClankerLauncher" } as never);
+        }}
+        style={{ marginBottom: 24 }}
+      >
+        <View
+          style={{
+            width: 52,
+            height: 52,
+            borderRadius: 26,
+            borderWidth: 1,
+            borderColor: "rgba(155,135,245,0.45)",
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "rgba(155,135,245,0.2)"
+          }}
+        >
+          <Text style={{ fontSize: 14, fontWeight: "800" }}>C</Text>
+        </View>
+      </Pressable>
     </View>
   );
 }
