@@ -3,7 +3,8 @@ import { View, Text, Pressable } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import * as Haptics from "expo-haptics";
 import { useAppState } from "../state/AppState";
-import { GateLockCard } from "../ui/GateLockCard";
+import { AccessGate } from "../components/AccessGate";
+import { Theme } from "../theme";
 import { ChannelChat } from "./channels/ChannelChat";
 import { Threads } from "./channels/Threads";
 import { Digest } from "./channels/Digest";
@@ -59,15 +60,13 @@ export function SpaceView({ navigation, route }: any) {
   }
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: Theme.colors.primaryBlue }}>
       <View
         style={{
           paddingTop: 54,
-          paddingHorizontal: 14,
-          paddingBottom: 12,
-          borderBottomWidth: 1,
-          borderBottomColor: "rgba(0,0,0,0.10)",
-          backgroundColor: "white"
+          paddingHorizontal: Theme.spacing.lg,
+          paddingBottom: Theme.spacing.md,
+          backgroundColor: Theme.colors.primaryBlue
         }}
       >
         <View style={{ flexDirection: "row", alignItems: "center" }}>
@@ -76,65 +75,96 @@ export function SpaceView({ navigation, route }: any) {
             style={{
               width: 42,
               height: 42,
-              borderRadius: 14,
+              borderRadius: Theme.radius.md,
               borderWidth: 1,
-              borderColor: "rgba(0,0,0,0.12)",
+              borderColor: "rgba(255,255,255,0.35)",
               alignItems: "center",
               justifyContent: "center",
               marginRight: 10
             }}
           >
-            <Text style={{ fontSize: 18 }}>Menu</Text>
+            <Text style={{ fontSize: 16, color: "white", fontWeight: "800" }}>≡</Text>
           </Pressable>
 
           <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 18, fontWeight: "900" }} numberOfLines={1}>
+            <Text style={{ fontSize: 18, fontWeight: "900", color: "white" }} numberOfLines={1}>
               {title}
             </Text>
-            <Text style={{ marginTop: 2, opacity: 0.6 }} numberOfLines={1}>
-              {space?.is_gated && !joined ? "Locked actions" : "Ready"}
+            <Text style={{ marginTop: 2, color: "rgba(255,255,255,0.7)" }} numberOfLines={1}>
+              {space?.is_gated && !joined ? "Access required" : "Ready"}
             </Text>
           </View>
 
           <Pressable
+            onPress={() => navigation.navigate("Settings")}
+            style={{
+              height: 34,
+              paddingHorizontal: 12,
+              borderRadius: Theme.radius.md,
+              backgroundColor: "rgba(255,255,255,0.2)",
+              alignItems: "center",
+              justifyContent: "center",
+              marginRight: 8
+            }}
+          >
+            <Text style={{ color: "white", fontWeight: "800" }}>Tools</Text>
+          </Pressable>
+
+          <Pressable
             onPress={() => navigation.navigate("Members", { spaceId })}
             style={{
-              height: 36,
+              height: 34,
               paddingHorizontal: 12,
-              borderRadius: 12,
-              backgroundColor: "rgba(0,0,0,0.06)",
+              borderRadius: Theme.radius.md,
+              backgroundColor: "rgba(255,255,255,0.2)",
               alignItems: "center",
               justifyContent: "center"
             }}
           >
-            <Text style={{ fontWeight: "800" }}>Members</Text>
+            <Text style={{ color: "white", fontWeight: "800" }}>Members</Text>
           </Pressable>
         </View>
-
-        {space?.is_gated && !joined ? (
-          <View style={{ marginTop: 12 }}>
-            <GateLockCard
-              title="This space is locked"
-              subtitle="Join or unlock required to post, comment, and use DMs."
-              cta={hasSession ? "Join or unlock" : "Sign in to unlock"}
-              onPress={onUnlock}
-            />
-          </View>
-        ) : null}
       </View>
 
-      <View style={{ flex: 1 }}>
-        <Tabs.Navigator screenOptions={{ headerShown: false, tabBarStyle: { height: 58, paddingBottom: 10 } }}>
-          <Tabs.Screen name="chat" options={{ tabBarLabel: "# chat" }}>
-            {() => <ChannelChat spaceId={spaceId} locked={Boolean(space?.is_gated && !joined)} navigation={navigation} />}
-          </Tabs.Screen>
-          <Tabs.Screen name="threads" options={{ tabBarLabel: "# threads" }}>
-            {() => <Threads spaceId={spaceId} locked={Boolean(space?.is_gated && !joined)} navigation={navigation} />}
-          </Tabs.Screen>
-          <Tabs.Screen name="digest" options={{ tabBarLabel: "# digest" }}>
-            {() => <Digest spaceId={spaceId} navigation={navigation} />}
-          </Tabs.Screen>
-        </Tabs.Navigator>
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: Theme.colors.surface,
+          borderTopLeftRadius: Theme.radius.xl,
+          borderTopRightRadius: Theme.radius.xl
+        }}
+      >
+        {space?.is_gated && !joined ? (
+          <View style={{ padding: Theme.spacing.lg }}>
+            <AccessGate
+              title="Unlock this space"
+              subtitle="Join or unlock to access chat, threads, and DMs."
+              ctaLabel={hasSession ? "Join / Unlock" : "Sign in"}
+              onPress={onUnlock}
+              secondaryLabel="Back to spaces"
+              onSecondary={() => navigation.navigate("SpacesHome")}
+            />
+          </View>
+        ) : (
+          <Tabs.Navigator
+            screenOptions={{
+              headerShown: false,
+              tabBarStyle: { height: 58, paddingBottom: 8, backgroundColor: "white" },
+              tabBarActiveTintColor: Theme.colors.primaryBlue2,
+              tabBarInactiveTintColor: Theme.colors.textMuted
+            }}
+          >
+            <Tabs.Screen name="chat" options={{ tabBarLabel: "Chat" }}>
+              {() => <ChannelChat spaceId={spaceId} locked={false} navigation={navigation} />}
+            </Tabs.Screen>
+            <Tabs.Screen name="threads" options={{ tabBarLabel: "Threads" }}>
+              {() => <Threads spaceId={spaceId} locked={false} navigation={navigation} />}
+            </Tabs.Screen>
+            <Tabs.Screen name="digest" options={{ tabBarLabel: "Digest" }}>
+              {() => <Digest spaceId={spaceId} navigation={navigation} />}
+            </Tabs.Screen>
+          </Tabs.Navigator>
+        )}
       </View>
     </View>
   );

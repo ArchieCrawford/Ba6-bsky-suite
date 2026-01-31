@@ -1,10 +1,10 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, FlatList, TextInput, Pressable } from "react-native";
 import * as Haptics from "expo-haptics";
 import { useAppState } from "../../state/AppState";
 import { shortDid } from "../../lib/format";
-import { GateLockCard } from "../../ui/GateLockCard";
-import { checkGate } from "../../lib/gates";
+import { checkGate, GateCheckResult } from "../../lib/gates";
+import { Theme } from "../../theme";
 
 type ChatMsg = { id: string; name: string; body: string; ts: string };
 
@@ -25,6 +25,7 @@ export function ChannelChat({
   const { hasSession, identity, email } = useAppState();
   const [text, setText] = useState("");
   const [items, setItems] = useState<ChatMsg[]>(demo);
+  const [gate, setGate] = useState<GateCheckResult | null>(null);
 
   const me = useMemo(() => {
     if (identity?.handle) return `@${identity.handle}`;
@@ -32,27 +33,23 @@ export function ChannelChat({
     return email ?? "me";
   }, [identity, email]);
 
+  useEffect(() => {
+    let active = true;
+    checkGate({ target_type: "space", target_id: spaceId, action: "post" }).then((res) => {
+      if (active) setGate(res);
+    });
+    return () => {
+      active = false;
+    };
+  }, [spaceId]);
+
   const onSend = async () => {
     if (!hasSession) {
       navigation.navigate("Login");
       return;
     }
     if (!text.trim()) return;
-
-    if (locked) {
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      return;
-    }
-
-    const gate = await checkGate({ target_type: "space", target_id: spaceId, action: "send_message" });
-    if (!gate.ok) {
-      if (gate.reason === "wallet_required" || gate.reason === "wallet_not_verified") {
-        navigation.navigate("Wallets");
-        return;
-      }
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      return;
-    }
+    if (locked || (gate && !gate.ok)) return;
 
     await Haptics.selectionAsync();
     const msg: ChatMsg = { id: `${Date.now()}`, name: me, body: text.trim(), ts: "now" };
@@ -75,14 +72,58 @@ export function ChannelChat({
         )}
       />
 
-      {locked ? (
+      {locked || (gate && !gate.ok) ? (
         <View style={{ padding: 14 }}>
-          <GateLockCard
-            title="Posting is locked"
-            subtitle="Unlock this space to post in #chat."
-            cta={hasSession ? "Join or unlock" : "Sign in"}
-            onPress={() => navigation.navigate("SpaceView", { spaceId })}
-          />
+          <View
+            style={{
+              borderWidth: 1,
+              borderColor: Theme.colors.border,
+              backgroundColor: Theme.colors.surface,
+              padding: Theme.spacing.md,
+              borderRadius: Theme.radius.lg
+            }}
+          >
+            <Text style={{ fontWeight: "800", color: Theme.colors.text }}>Locked</Text>
+            <Text style={{ marginTop: 6, color: Theme.colors.textMuted }}>
+              {gate && !gate.ok
+                ? gate.reason === "payment_required"
+                  ? "Unlock required to post in chat."
+                  : gate.reason === "wallet_required" || gate.reason === "wallet_not_verified"
+                  ? "Connect a wallet to post in chat."
+                  : "Access required to post in chat."
+                : "Access required to post in chat."}
+            </Text>
+            <Pressable
+              onPress={() => {
+                if (!hasSession) {
+                  navigation.navigate("Login");
+                  return;
+                }
+                if (gate && !gate.ok) {
+                  if (gate.reason === "wallet_required" || gate.reason === "wallet_not_verified") {
+                    navigation.navigate("Wallets");
+                    return;
+                  }
+                  if (gate.reason === "payment_required") {
+                    navigation.navigate("Settings");
+                    return;
+                  }
+                }
+              }}
+              style={{
+                marginTop: Theme.spacing.sm,
+                height: 40,
+                borderRadius: Theme.radius.md,
+                backgroundColor: Theme.colors.primaryBlue2,
+                alignItems: "center",
+                justifyContent: "center"
+              }}
+            >
+              <Text style={{ color: "white", fontWeight: "800" }}>
+                {hasSession ? "Unlock" : "Sign in"}
+              </Text>
+            </Pressable>
+          </View>
         </View>
       ) : (
         <View

@@ -10,8 +10,9 @@ import { DirectMessages } from "../screens/DirectMessages";
 import { DMThread } from "../screens/DMThread";
 import { Wallets } from "../screens/Wallets";
 import { Login } from "../screens/Login";
-import { ConsoleHome } from "../screens/ConsoleHome";
 import { ClankerLauncher } from "../screens/ClankerLauncher";
+import { Settings } from "../screens/Settings";
+import { AccessGate } from "../screens/AccessGate";
 import { useAppState } from "../state/AppState";
 
 export type RootStackParamList = {
@@ -21,8 +22,9 @@ export type RootStackParamList = {
   DirectMessages: undefined;
   DMThread: { did: string; title?: string };
   Wallets: undefined;
-  ConsoleHome: undefined;
+  Settings: undefined;
   ClankerLauncher: undefined;
+  AccessGate: undefined;
   Login: undefined;
 };
 
@@ -34,12 +36,12 @@ function MainStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="SpacesHome" component={SpacesHome} />
-      <Stack.Screen name="ConsoleHome" component={ConsoleHome} />
       <Stack.Screen name="SpaceView" component={SpaceView} />
       <Stack.Screen name="Members" component={Members} />
       <Stack.Screen name="DirectMessages" component={DirectMessages} />
       <Stack.Screen name="DMThread" component={DMThread} />
       <Stack.Screen name="Wallets" component={Wallets} />
+      <Stack.Screen name="Settings" component={Settings} />
       <Stack.Screen name="ClankerLauncher" component={ClankerLauncher} />
       {!hasSession ? <Stack.Screen name="Login" component={Login} /> : null}
     </Stack.Navigator>
@@ -47,19 +49,27 @@ function MainStack() {
 }
 
 export function RootNavigator() {
+  const { hasSession } = useAppState();
   return (
     <NavigationContainer>
-      <Drawer.Navigator
-        screenOptions={{
-          headerShown: false,
-          drawerType: "front",
-          overlayColor: "rgba(0,0,0,0.28)",
-          drawerStyle: { width: 92 }
-        }}
-        drawerContent={(props) => <SpaceSwitcherDrawer {...props} />}
-      >
-        <Drawer.Screen name="Main" component={MainStack} />
-      </Drawer.Navigator>
+      {hasSession ? (
+        <Drawer.Navigator
+          screenOptions={{
+            headerShown: false,
+            drawerType: "front",
+            overlayColor: "rgba(0,0,0,0.28)",
+            drawerStyle: { width: 92 }
+          }}
+          drawerContent={(props) => <SpaceSwitcherDrawer {...props} />}
+        >
+          <Drawer.Screen name="Main" component={MainStack} />
+        </Drawer.Navigator>
+      ) : (
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="AccessGate" component={AccessGate} />
+          <Stack.Screen name="Login" component={Login} />
+        </Stack.Navigator>
+      )}
     </NavigationContainer>
   );
 }
