@@ -10,6 +10,8 @@ import { DirectMessages } from "../screens/DirectMessages";
 import { DMThread } from "../screens/DMThread";
 import { Wallets } from "../screens/Wallets";
 import { Login } from "../screens/Login";
+import { ConsoleHome } from "../screens/ConsoleHome";
+import { ClankerLauncher } from "../screens/ClankerLauncher";
 import { useAppState } from "../state/AppState";
 
 export type RootStackParamList = {
@@ -19,6 +21,8 @@ export type RootStackParamList = {
   DirectMessages: undefined;
   DMThread: { did: string; title?: string };
   Wallets: undefined;
+  ConsoleHome: undefined;
+  ClankerLauncher: undefined;
   Login: undefined;
 };
 
@@ -30,11 +34,13 @@ function MainStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="SpacesHome" component={SpacesHome} />
+      <Stack.Screen name="ConsoleHome" component={ConsoleHome} />
       <Stack.Screen name="SpaceView" component={SpaceView} />
       <Stack.Screen name="Members" component={Members} />
       <Stack.Screen name="DirectMessages" component={DirectMessages} />
       <Stack.Screen name="DMThread" component={DMThread} />
       <Stack.Screen name="Wallets" component={Wallets} />
+      <Stack.Screen name="ClankerLauncher" component={ClankerLauncher} />
       {!hasSession ? <Stack.Screen name="Login" component={Login} /> : null}
     </Stack.Navigator>
   );
@@ -44,7 +50,6 @@ export function RootNavigator() {
   return (
     <NavigationContainer>
       <Drawer.Navigator
-        useLegacyImplementation={false}
         screenOptions={{
           headerShown: false,
           drawerType: "front",

@@ -1,5 +1,6 @@
 export const ENV = {
   SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
   SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
-  BA6_API_BASE: process.env.EXPO_PUBLIC_BA6_API_BASE ?? ""
+  BA6_API_BASE: process.env.EXPO_PUBLIC_BA6_API_BASE ?? "",
+  DASHBOARD_URL: process.env.EXPO_PUBLIC_DASHBOARD_URL ?? ""
 };

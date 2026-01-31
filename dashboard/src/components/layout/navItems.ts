@@ -10,7 +10,8 @@ import {
   Users,
   Wallet,
   Activity,
-  LifeBuoy
+  LifeBuoy,
+  Rocket
 } from "lucide-react";
 
 export const navItems = [
@@ -22,6 +23,7 @@ export const navItems = [
   { href: "/generate/image", label: "Generate", icon: Sparkles },
   { href: "/generate/text", label: "Generate Text", icon: MessageSquare },
   { href: "/generate/video", label: "Generate Video", icon: Video },
+  { href: "/clanker", label: "Clanker", icon: Rocket },
   { href: "/feeds", label: "Feeds", icon: Rss },
   { href: "/accounts", label: "Accounts", icon: Users },
   { href: "/wallets", label: "Wallets", icon: Wallet },
