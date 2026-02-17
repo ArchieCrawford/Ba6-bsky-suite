@@ -11,7 +11,8 @@ import {
 } from "react-native";
 import * as Haptics from "expo-haptics";
 import { getSupabase } from "../lib/supabase";
-import { Theme } from "../theme";
+import { TownsBA6Theme as T } from "../ui/towns/theme";
+import { SurfaceCard } from "../ui/towns/SurfaceCard";
 
 type Action = "signin" | "signup" | "magic" | null;
 
@@ -85,25 +86,24 @@ export function AuthScreen({ navigation }: any) {
     const disabled = isActive || options?.disabled;
     const baseStyle = {
       height: 48,
-      borderRadius: Theme.radius.md,
+      borderRadius: T.radii.pill,
       alignItems: "center" as const,
       justifyContent: "center" as const,
-      marginTop: Theme.spacing.sm
+      marginTop: T.space.s10
     };
     const colorStyle =
       kind === "primary"
-        ? { backgroundColor: Theme.colors.primaryBlue2 }
-        : { borderWidth: 1, borderColor: Theme.colors.border, backgroundColor: "white" };
+        ? { backgroundColor: T.colors.blue1 }
+        : { backgroundColor: T.colors.layer2 };
 
     return (
-      <Pressable onPress={onPress} disabled={disabled} style={[baseStyle, colorStyle, disabled && { opacity: 0.6 }]}
-      >
+      <Pressable onPress={onPress} disabled={disabled} style={[baseStyle, colorStyle, disabled && { opacity: 0.6 }]}>
         {isActive ? (
-          <ActivityIndicator color={kind === "primary" ? "white" : Theme.colors.text} />
+          <ActivityIndicator color={kind === "primary" ? "white" : T.colors.text} />
         ) : (
           <Text
             style={{
-              color: kind === "primary" ? "white" : Theme.colors.text,
+              color: kind === "primary" ? "white" : T.colors.text,
               fontWeight: "800"
             }}
           >
@@ -115,7 +115,7 @@ export function AuthScreen({ navigation }: any) {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: Theme.colors.primaryBlue }}>
+    <View style={{ flex: 1, backgroundColor: T.colors.bg }}>
       <View
         pointerEvents="none"
         style={{
@@ -125,7 +125,7 @@ export function AuthScreen({ navigation }: any) {
           width: 220,
           height: 220,
           borderRadius: 200,
-          backgroundColor: "rgba(30,58,138,0.35)"
+          backgroundColor: "rgba(11,60,255,0.12)"
         }}
       />
       <View
@@ -137,36 +137,27 @@ export function AuthScreen({ navigation }: any) {
           width: 180,
           height: 180,
           borderRadius: 160,
-          backgroundColor: "rgba(11,27,58,0.45)"
+          backgroundColor: "rgba(10,30,106,0.12)"
         }}
       />
       <ScrollView
         contentContainerStyle={{
           paddingTop: 72,
-          paddingHorizontal: Theme.spacing.lg,
+          paddingHorizontal: T.space.s16,
           paddingBottom: 48
         }}
       >
-        <View
-          style={{
-            backgroundColor: "white",
-            borderRadius: Theme.radius.xl,
-            padding: Theme.spacing.lg,
-            borderWidth: 1,
-            borderColor: "rgba(255,255,255,0.14)",
-            elevation: 3
-          }}
-        >
+        <SurfaceCard padding={T.space.s16}>
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             <View
               style={{
                 width: 64,
                 height: 64,
                 borderRadius: 18,
-                backgroundColor: Theme.colors.primaryBlue,
+                backgroundColor: T.colors.blue3,
                 alignItems: "center",
                 justifyContent: "center",
-                marginRight: Theme.spacing.md
+                marginRight: T.space.s12
               }}
             >
               <Image
@@ -176,58 +167,54 @@ export function AuthScreen({ navigation }: any) {
               />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ color: Theme.colors.text, fontSize: 20, fontWeight: "900" }}>
-                Sign in to the control panel
+              <Text style={{ color: T.colors.text, fontSize: 20, fontWeight: "900" }}>
+                Sign in to BA6
               </Text>
-              <Text style={{ marginTop: 6, color: Theme.colors.textMuted }}>
-                Access spaces, chat, threads, and tools.
+              <Text style={{ marginTop: 6, color: T.colors.textMuted }}>
+                Access groups, chat, and tools.
               </Text>
             </View>
           </View>
 
-          <View style={{ marginTop: Theme.spacing.lg }}>
+          <View style={{ marginTop: T.space.s16 }}>
             <TextInput
               value={email}
               onChangeText={setEmail}
               placeholder="Email"
-              placeholderTextColor="rgba(12,15,20,0.4)"
+              placeholderTextColor={T.colors.textMuted}
               autoCapitalize="none"
               keyboardType="email-address"
               style={{
                 height: 48,
-                borderWidth: 1,
-                borderColor: Theme.colors.border,
-                borderRadius: Theme.radius.md,
+                borderRadius: T.radii.input,
                 paddingHorizontal: 14,
-                backgroundColor: "white",
-                color: Theme.colors.text
+                backgroundColor: T.colors.layer2,
+                color: T.colors.text
               }}
             />
             <TextInput
               value={password}
               onChangeText={setPassword}
               placeholder="Password"
-              placeholderTextColor="rgba(12,15,20,0.4)"
+              placeholderTextColor={T.colors.textMuted}
               secureTextEntry
               style={{
                 height: 48,
-                borderWidth: 1,
-                borderColor: Theme.colors.border,
-                borderRadius: Theme.radius.md,
+                borderRadius: T.radii.input,
                 paddingHorizontal: 14,
-                backgroundColor: "white",
-                color: Theme.colors.text,
-                marginTop: Theme.spacing.sm
+                backgroundColor: T.colors.layer2,
+                color: T.colors.text,
+                marginTop: T.space.s10
               }}
             />
 
             {error ? (
-              <Text style={{ color: Theme.colors.danger, marginTop: Theme.spacing.xs, fontWeight: "700" }}>
+              <Text style={{ color: "#E14B4B", marginTop: T.space.s8, fontWeight: "700" }}>
                 {error}
               </Text>
             ) : null}
             {info ? (
-              <Text style={{ color: Theme.colors.primaryBlue2, marginTop: Theme.spacing.xs, fontWeight: "700" }}>
+              <Text style={{ color: T.colors.blue1, marginTop: T.space.s8, fontWeight: "700" }}>
                 {info}
               </Text>
             ) : null}
@@ -236,20 +223,13 @@ export function AuthScreen({ navigation }: any) {
             {renderButton("Create account", "signup", handleSignUp, { kind: "secondary" })}
           </View>
 
-          <View
-            style={{
-              marginTop: Theme.spacing.lg,
-              borderTopWidth: 1,
-              borderTopColor: Theme.colors.border,
-              paddingTop: Theme.spacing.lg
-            }}
-          >
-            <Text style={{ color: Theme.colors.text, fontWeight: "800", marginBottom: Theme.spacing.sm }}>
+          <View style={{ marginTop: T.space.s16 }}>
+            <Text style={{ color: T.colors.text, fontWeight: "800", marginBottom: T.space.s10 }}>
               Other options
             </Text>
             {renderButton("Continue with Magic (Email)", "magic", handleMagic, { kind: "secondary" })}
 
-            <View style={{ marginTop: Theme.spacing.sm }}>
+            <View style={{ marginTop: T.space.s10 }}>
               {["Sign in with Solana (Phantom)", "Sign in with Ethereum (MetaMask)", "Connect Wallet (Magic)"].map(
                 (label) => (
                   <Pressable
@@ -257,17 +237,15 @@ export function AuthScreen({ navigation }: any) {
                     disabled
                     style={{
                       height: 44,
-                      borderRadius: Theme.radius.md,
-                      borderWidth: 1,
-                      borderColor: Theme.colors.border,
-                      backgroundColor: Theme.colors.surface,
+                      borderRadius: T.radii.input,
+                      backgroundColor: T.colors.layer2,
                       alignItems: "center",
                       justifyContent: "center",
-                      marginTop: Theme.spacing.xs,
-                      opacity: 0.4
+                      marginTop: T.space.s6,
+                      opacity: 0.5
                     }}
                   >
-                    <Text style={{ color: Theme.colors.textMuted, fontWeight: "700" }}>{label}</Text>
+                    <Text style={{ color: T.colors.textMuted, fontWeight: "700" }}>{label}</Text>
                   </Pressable>
                 )
               )}
@@ -276,13 +254,13 @@ export function AuthScreen({ navigation }: any) {
 
           <Pressable
             onPress={() => Linking.openURL("mailto:support@ba6.app").catch(() => {})}
-            style={{ marginTop: Theme.spacing.lg, alignItems: "center" }}
+            style={{ marginTop: T.space.s16, alignItems: "center" }}
           >
-            <Text style={{ color: Theme.colors.textMuted, fontWeight: "700" }}>
+            <Text style={{ color: T.colors.textMuted, fontWeight: "700" }}>
               Need help? Contact support
             </Text>
           </Pressable>
-        </View>
+        </SurfaceCard>
       </ScrollView>
     </View>
   );

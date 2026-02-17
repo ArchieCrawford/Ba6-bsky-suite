@@ -1,49 +1,30 @@
 import React from "react";
 import { NavigationContainer } from "@react-navigation/native";
-import { createDrawerNavigator } from "@react-navigation/drawer";
 import { createStackNavigator } from "@react-navigation/stack";
-import { SpaceSwitcherDrawer } from "./SpaceSwitcherDrawer";
-import { SpacesHome } from "../screens/SpacesHome";
-import { SpaceView } from "../screens/SpaceView";
-import { Members } from "../screens/Members";
-import { DirectMessages } from "../screens/DirectMessages";
-import { DMThread } from "../screens/DMThread";
-import { Wallets } from "../screens/Wallets";
+import { GroupsHome } from "../screens/GroupsHome";
+import { GroupChat } from "../screens/GroupChat";
 import { Login } from "../screens/Login";
-import { ClankerLauncher } from "../screens/ClankerLauncher";
 import { Settings } from "../screens/Settings";
 import { AccessGate } from "../screens/AccessGate";
 import { useAppState } from "../state/AppState";
 
 export type RootStackParamList = {
-  SpacesHome: undefined;
-  SpaceView: { spaceId?: string } | undefined;
-  Members: { spaceId: string };
-  DirectMessages: undefined;
-  DMThread: { did: string; title?: string };
-  Wallets: undefined;
+  GroupsHome: undefined;
+  GroupChat: { groupId: string; groupName?: string; inviteCode?: string };
   Settings: undefined;
-  ClankerLauncher: undefined;
   AccessGate: undefined;
   Login: undefined;
 };
 
-const Drawer = createDrawerNavigator();
 const Stack = createStackNavigator<RootStackParamList>();
 
-function MainStack() {
-  const { hasSession } = useAppState();
+function AuthedStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="SpacesHome" component={SpacesHome} />
-      <Stack.Screen name="SpaceView" component={SpaceView} />
-      <Stack.Screen name="Members" component={Members} />
-      <Stack.Screen name="DirectMessages" component={DirectMessages} />
-      <Stack.Screen name="DMThread" component={DMThread} />
-      <Stack.Screen name="Wallets" component={Wallets} />
+      <Stack.Screen name="GroupsHome" component={GroupsHome} />
+      <Stack.Screen name="GroupChat" component={GroupChat} />
       <Stack.Screen name="Settings" component={Settings} />
-      <Stack.Screen name="ClankerLauncher" component={ClankerLauncher} />
-      {!hasSession ? <Stack.Screen name="Login" component={Login} /> : null}
+      <Stack.Screen name="Login" component={Login} />
     </Stack.Navigator>
   );
 }
@@ -53,17 +34,7 @@ export function RootNavigator() {
   return (
     <NavigationContainer>
       {hasSession ? (
-        <Drawer.Navigator
-          screenOptions={{
-            headerShown: false,
-            drawerType: "front",
-            overlayColor: "rgba(0,0,0,0.28)",
-            drawerStyle: { width: 92 }
-          }}
-          drawerContent={(props) => <SpaceSwitcherDrawer {...props} />}
-        >
-          <Drawer.Screen name="Main" component={MainStack} />
-        </Drawer.Navigator>
+        <AuthedStack />
       ) : (
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           <Stack.Screen name="AccessGate" component={AccessGate} />

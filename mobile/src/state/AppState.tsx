@@ -1,8 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { getSupabase } from "../lib/supabase";
-import { fetchIdentity, IdentityRow } from "../lib/identity";
-import { Space } from "../types/models";
-import { apiFetch } from "../lib/api";
+import type { IdentityRow } from "../lib/identity";
+import type { Space } from "../types/models";
 
 type Ctx = {
   ready: boolean;
@@ -19,12 +18,6 @@ type Ctx = {
 
 const AppContext = createContext<Ctx | null>(null);
 
-const mockSpaces: Space[] = [
-  { id: "space_demo_1", name: "BA6 HQ", slug: "ba6-hq", is_gated: false, is_member: true, unread_count: 2 },
-  { id: "space_demo_2", name: "Creators", slug: "creators", is_gated: true, is_member: false, unread_count: 0 },
-  { id: "space_demo_3", name: "Operators", slug: "operators", is_gated: false, is_member: true, unread_count: 5 }
-];
-
 export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const supabase = getSupabase();
   const [ready, setReady] = useState(false);
@@ -35,41 +28,31 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const [currentSpaceId, setCurrentSpaceId] = useState<string | null>(null);
 
   const refreshIdentity = async () => {
-    const res = await fetchIdentity();
-    if (res.ok) setIdentity(res.data);
+    setIdentity(null);
   };
 
   const refreshSpaces = async () => {
-    const res = await apiFetch<{ spaces: Space[] }>("/api/spaces/list", { method: "GET" });
-    if (res.ok && Array.isArray(res.data?.spaces)) {
-      setSpaces(res.data.spaces);
-      if (!currentSpaceId && res.data.spaces[0]?.id) setCurrentSpaceId(res.data.spaces[0].id);
-      return;
-    }
-    setSpaces(mockSpaces);
-    if (!currentSpaceId) setCurrentSpaceId(mockSpaces[0].id);
+    setSpaces([]);
+    if (currentSpaceId) setCurrentSpaceId(null);
   };
 
   useEffect(() => {
     let mounted = true;
 
-    supabase.auth.getSession().then(async ({ data }) => {
+    supabase.auth.getSession().then(({ data }) => {
       if (!mounted) return;
       const sess = data.session;
       setHasSession(Boolean(sess));
       setEmail(sess?.user?.email ?? null);
-      await refreshSpaces();
-      if (sess) await refreshIdentity();
+      if (!sess) setIdentity(null);
       setReady(true);
     });
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!mounted) return;
       setHasSession(Boolean(session));
       setEmail(session?.user?.email ?? null);
-      await refreshSpaces();
-      if (session) await refreshIdentity();
-      else setIdentity(null);
+      if (!session) setIdentity(null);
     });
 
     return () => {
