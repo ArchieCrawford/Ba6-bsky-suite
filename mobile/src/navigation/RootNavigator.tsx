@@ -20,11 +20,10 @@ const Stack = createStackNavigator<RootStackParamList>();
 
 function AuthedStack() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="GroupsHome">
       <Stack.Screen name="GroupsHome" component={GroupsHome} />
       <Stack.Screen name="GroupChat" component={GroupChat} />
       <Stack.Screen name="Settings" component={Settings} />
-      <Stack.Screen name="Login" component={Login} />
     </Stack.Navigator>
   );
 }
@@ -34,9 +33,9 @@ export function RootNavigator() {
   return (
     <NavigationContainer>
       {hasSession ? (
-        <AuthedStack />
+        <AuthedStack key="authed" />
       ) : (
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Navigator screenOptions={{ headerShown: false }} key="auth">
           <Stack.Screen name="AccessGate" component={AccessGate} />
           <Stack.Screen name="Login" component={Login} />
         </Stack.Navigator>
