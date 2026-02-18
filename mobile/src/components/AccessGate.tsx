@@ -1,6 +1,6 @@
 import React from "react";
 import { View, Text, Pressable } from "react-native";
-import { Theme } from "../theme";
+import { TownsBA6Theme as T } from "../ui/towns/theme";
 
 export function AccessGate({
   title,
@@ -20,28 +20,27 @@ export function AccessGate({
   return (
     <View
       style={{
-        borderWidth: 1,
-        borderColor: Theme.colors.border,
-        backgroundColor: Theme.colors.surface,
-        padding: Theme.spacing.lg,
-        borderRadius: Theme.radius.lg
+        backgroundColor: T.colors.layer1,
+        padding: T.space.s16,
+        borderRadius: T.radii.card,
+        shadowColor: T.colors.shadow,
+        shadowOpacity: 0.12,
+        shadowRadius: 10,
+        shadowOffset: { width: 0, height: 3 },
+        elevation: 1
       }}
     >
-      <Text style={{ fontSize: 18, fontWeight: "800", color: Theme.colors.text }}>
-        {title}
-      </Text>
+      <Text style={{ fontSize: 18, fontWeight: "800", color: T.colors.text }}>{title}</Text>
       {subtitle ? (
-        <Text style={{ marginTop: 6, color: Theme.colors.textMuted }}>
-          {subtitle}
-        </Text>
+        <Text style={{ marginTop: 6, color: T.colors.textMuted }}>{subtitle}</Text>
       ) : null}
       <Pressable
         onPress={onPress}
         style={{
-          marginTop: Theme.spacing.md,
+          marginTop: T.space.s12,
           height: 44,
-          borderRadius: Theme.radius.md,
-          backgroundColor: Theme.colors.primaryBlue2,
+          borderRadius: T.radii.pill,
+          backgroundColor: T.colors.blue1,
           alignItems: "center",
           justifyContent: "center"
         }}
@@ -52,19 +51,15 @@ export function AccessGate({
         <Pressable
           onPress={onSecondary}
           style={{
-            marginTop: Theme.spacing.sm,
+            marginTop: T.space.s10,
             height: 40,
-            borderRadius: Theme.radius.md,
-            borderWidth: 1,
-            borderColor: Theme.colors.border,
+            borderRadius: T.radii.pill,
+            backgroundColor: T.colors.layer2,
             alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: "white"
+            justifyContent: "center"
           }}
         >
-          <Text style={{ color: Theme.colors.text, fontWeight: "700" }}>
-            {secondaryLabel}
-          </Text>
+          <Text style={{ color: T.colors.text, fontWeight: "700" }}>{secondaryLabel}</Text>
         </Pressable>
       ) : null}
     </View>

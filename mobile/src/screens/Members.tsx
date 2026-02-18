@@ -1,7 +1,8 @@
 import React from "react";
 import { View, Text, Pressable, ScrollView } from "react-native";
 import { Avatar } from "../ui/Avatar";
-import { Theme } from "../theme";
+import { TownsBA6Theme as T } from "../ui/towns/theme";
+import { ScreenHeader } from "../ui/towns/ScreenHeader";
 
 const demo = [
   { did: "did:ba6:owner", title: "@owner", role: "Owner" },
@@ -13,42 +14,33 @@ export function Members({ navigation, route }: any) {
   const spaceId = route?.params?.spaceId as string;
 
   return (
-    <View style={{ flex: 1, backgroundColor: Theme.colors.surface }}>
-      <View
-        style={{
-          paddingTop: 54,
-          paddingHorizontal: Theme.spacing.lg,
-          paddingBottom: Theme.spacing.md,
-          backgroundColor: Theme.colors.primaryBlue
-        }}
-      >
-        <Text style={{ fontSize: 18, fontWeight: "900", color: "white" }}>Members</Text>
-        <Text style={{ marginTop: 2, color: "rgba(255,255,255,0.7)" }} numberOfLines={1}>
-          {spaceId}
-        </Text>
-      </View>
+    <View style={{ flex: 1, backgroundColor: T.colors.bg }}>
+      <ScreenHeader title="Members" subtitle={spaceId} onPressBack={() => navigation.goBack?.()} backLabel="Back" />
 
-      <ScrollView contentContainerStyle={{ padding: Theme.spacing.lg, paddingBottom: Theme.spacing.xl }}>
+      <ScrollView contentContainerStyle={{ padding: T.space.s16, paddingBottom: T.space.s24 }}>
         {demo.map((m) => (
           <Pressable
             key={m.did}
             onPress={() => navigation.navigate("DMThread", { did: m.did, title: m.title })}
             style={{
-              borderWidth: 1,
-              borderColor: Theme.colors.border,
-              padding: Theme.spacing.md,
-              borderRadius: Theme.radius.lg,
-              marginBottom: Theme.spacing.sm,
+              padding: T.space.s14,
+              borderRadius: T.radii.card,
+              marginBottom: T.space.s12,
               flexDirection: "row",
               alignItems: "center",
               gap: 12,
-              backgroundColor: "white"
+              backgroundColor: T.colors.layer1,
+              shadowColor: T.colors.shadow,
+              shadowOpacity: 0.12,
+              shadowRadius: 10,
+              shadowOffset: { width: 0, height: 3 },
+              elevation: 1
             }}
           >
             <Avatar label={m.title} />
             <View style={{ flex: 1 }}>
-              <Text style={{ fontWeight: "900", color: Theme.colors.text }}>{m.title}</Text>
-              <Text style={{ marginTop: 6, color: Theme.colors.textMuted }}>
+              <Text style={{ fontWeight: "900", color: T.colors.text }}>{m.title}</Text>
+              <Text style={{ marginTop: 6, color: T.colors.textMuted }}>
                 {m.role} - {m.did}
               </Text>
             </View>

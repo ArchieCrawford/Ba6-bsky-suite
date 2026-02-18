@@ -1,9 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, TextInput, Pressable, FlatList } from "react-native";
+import { View, Text, FlatList } from "react-native";
 import * as Haptics from "expo-haptics";
 import { checkGate, GateCheckResult } from "../lib/gates";
-import { Theme } from "../theme";
 import { AccessGate } from "../components/AccessGate";
+import { TownsBA6Theme as T } from "../ui/towns/theme";
+import { ChatHeader } from "../ui/towns/ChatHeader";
+import { MessageBubble } from "../ui/towns/MessageBubble";
+import { MessageInputBar } from "../ui/towns/MessageInputBar";
 
 type Msg = { id: string; body: string; side: "me" | "them" };
 
@@ -38,16 +41,15 @@ export function DMThread({ navigation, route }: any) {
 
   if (gate && !gate.ok) {
     return (
-      <View style={{ flex: 1, backgroundColor: Theme.colors.surface }}>
-        <View style={{ paddingTop: 54, paddingHorizontal: Theme.spacing.lg }}>
-          <Text style={{ fontSize: 18, fontWeight: "900", color: Theme.colors.text }} numberOfLines={1}>
-            {title}
-          </Text>
-          <Text style={{ marginTop: 2, color: Theme.colors.textMuted }} numberOfLines={1}>
-            {did}
-          </Text>
-        </View>
-        <View style={{ padding: Theme.spacing.lg }}>
+      <View style={{ flex: 1, backgroundColor: T.colors.bg }}>
+        <ChatHeader
+          title={title}
+          subtitle={did}
+          statusLabel="Locked"
+          statusTone="muted"
+          onPressTools={() => navigation.goBack?.()}
+        />
+        <View style={{ padding: T.space.s16 }}>
           <AccessGate
             title="DMs locked"
             subtitle={
@@ -77,83 +79,36 @@ export function DMThread({ navigation, route }: any) {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: "white" }}>
-      <View
-        style={{
-          paddingTop: 54,
-          paddingHorizontal: 14,
-          paddingBottom: 12,
-          borderBottomWidth: 1,
-          borderBottomColor: "rgba(0,0,0,0.10)"
-        }}
-      >
-        <Text style={{ fontSize: 18, fontWeight: "900" }} numberOfLines={1}>
-          {title}
-        </Text>
-        <Text style={{ marginTop: 2, opacity: 0.65 }} numberOfLines={1}>
-          {did}
-        </Text>
-      </View>
+    <View style={{ flex: 1, backgroundColor: T.colors.bg }}>
+      <ChatHeader title={title} subtitle={did} statusLabel="Live" statusTone="live" onPressTools={() => navigation.goBack?.()} />
 
       <FlatList
         data={items}
         keyExtractor={(m) => m.id}
         inverted
-        contentContainerStyle={{ padding: 14, paddingBottom: 18 }}
-        renderItem={({ item }) => (
-          <View style={{ alignSelf: item.side === "me" ? "flex-end" : "flex-start", maxWidth: "82%", marginBottom: 10 }}>
-            <View
-              style={{
-                padding: 12,
-                borderRadius: 16,
-                backgroundColor: item.side === "me" ? "rgba(0,0,0,0.86)" : "rgba(0,0,0,0.06)"
-              }}
-            >
-              <Text style={{ color: item.side === "me" ? "white" : "black", opacity: item.side === "me" ? 1 : 0.88 }}>
-                {item.body}
-              </Text>
-            </View>
-          </View>
-        )}
+        contentContainerStyle={{
+          paddingHorizontal: T.space.s16,
+          paddingTop: T.space.s12,
+          paddingBottom: T.space.s24
+        }}
+        renderItem={({ item, index }) => {
+          const next = items[index + 1];
+          const grouped = next && next.side === item.side;
+          const name = item.side === "me" ? "You" : title;
+          return (
+            <MessageBubble
+              mine={item.side === "me"}
+              name={name}
+              body={item.body}
+              showName={!grouped}
+              showTimestamp={!grouped}
+              compact={Boolean(grouped)}
+            />
+          );
+        }}
       />
 
-      <View
-        style={{
-          padding: 12,
-          borderTopWidth: 1,
-          borderTopColor: "rgba(0,0,0,0.10)",
-          flexDirection: "row",
-          gap: 10,
-          alignItems: "center"
-        }}
-      >
-        <TextInput
-          value={text}
-          onChangeText={setText}
-          placeholder="Message"
-          style={{
-            flex: 1,
-            height: 44,
-            borderWidth: 1,
-            borderColor: "rgba(0,0,0,0.12)",
-            borderRadius: 14,
-            paddingHorizontal: 12
-          }}
-        />
-        <Pressable
-          onPress={send}
-          style={{
-            width: 56,
-            height: 44,
-            borderRadius: 14,
-            backgroundColor: Theme.colors.primaryBlue2,
-            alignItems: "center",
-            justifyContent: "center"
-          }}
-        >
-          <Text style={{ color: "white", fontWeight: "900" }}>Send</Text>
-        </Pressable>
-      </View>
+      <MessageInputBar value={text} onChangeText={setText} onSend={send} placeholder="Message" />
     </View>
   );
 }

@@ -10,6 +10,7 @@ type InputBarProps = {
   lockedText?: string;
   lockedCta?: string;
   onPressCta?: () => void;
+  placeholder?: string;
 };
 
 function LockIcon({ color }: { color: string }) {
@@ -49,7 +50,8 @@ export function MessageInputBar({
   locked,
   lockedText,
   lockedCta,
-  onPressCta
+  onPressCta,
+  placeholder
 }: InputBarProps) {
   if (locked) {
     return (
@@ -123,7 +125,7 @@ export function MessageInputBar({
         <TextInput
           value={value}
           onChangeText={onChangeText}
-          placeholder="Message #chat"
+          placeholder={placeholder ?? "Message #chat"}
           placeholderTextColor={T.colors.textMuted}
           style={{
             flex: 1,

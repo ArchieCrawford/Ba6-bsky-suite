@@ -1,7 +1,7 @@
 import React from "react";
 import { View, Text, Pressable } from "react-native";
-import { Theme } from "../theme";
 import { Space } from "../types/models";
+import { TownsBA6Theme as T } from "../ui/towns/theme";
 
 export function SpaceCard({
   space,
@@ -18,20 +18,23 @@ export function SpaceCard({
     <Pressable
       onPress={onOpen}
       style={{
-        borderWidth: 1,
-        borderColor: Theme.colors.border,
-        padding: Theme.spacing.md,
-        borderRadius: Theme.radius.lg,
-        backgroundColor: "white",
-        marginBottom: Theme.spacing.sm
+        padding: T.space.s14,
+        borderRadius: T.radii.card,
+        backgroundColor: T.colors.layer1,
+        marginBottom: T.space.s12,
+        shadowColor: T.colors.shadow,
+        shadowOpacity: 0.12,
+        shadowRadius: 10,
+        shadowOffset: { width: 0, height: 3 },
+        elevation: 1
       }}
     >
       <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-        <View style={{ flex: 1, paddingRight: Theme.spacing.sm }}>
-          <Text style={{ fontSize: 16, fontWeight: "800", color: Theme.colors.text }}>
+        <View style={{ flex: 1, paddingRight: T.space.s12 }}>
+          <Text style={{ fontSize: 16, fontWeight: "800", color: T.colors.text }} numberOfLines={1}>
             {space.name}
           </Text>
-          <Text style={{ marginTop: 6, color: Theme.colors.textMuted }}>
+          <Text style={{ marginTop: 6, color: T.colors.textMuted }} numberOfLines={1}>
             /{space.slug} · {space.join_mode ?? "public"}
           </Text>
         </View>
@@ -42,12 +45,12 @@ export function SpaceCard({
               height: 22,
               borderRadius: 11,
               paddingHorizontal: 6,
-              backgroundColor: Theme.colors.primaryBlue2,
+              backgroundColor: T.colors.yellow,
               alignItems: "center",
               justifyContent: "center"
             }}
           >
-            <Text style={{ color: "white", fontSize: 12, fontWeight: "800" }}>
+            <Text style={{ color: T.colors.text, fontSize: 12, fontWeight: "800" }}>
               {space.unread_count}
             </Text>
           </View>
@@ -55,16 +58,16 @@ export function SpaceCard({
       </View>
 
       {locked ? (
-        <View style={{ marginTop: Theme.spacing.sm, flexDirection: "row", gap: 10 }}>
+        <View style={{ marginTop: T.space.s10, flexDirection: "row", gap: 10 }}>
           <View
             style={{
               paddingHorizontal: 10,
               paddingVertical: 4,
               borderRadius: 999,
-              backgroundColor: "rgba(0,0,0,0.06)"
+              backgroundColor: T.colors.layer2
             }}
           >
-            <Text style={{ fontSize: 12, fontWeight: "700", color: Theme.colors.text }}>
+            <Text style={{ fontSize: 12, fontWeight: "700", color: T.colors.text }}>
               Locked
             </Text>
           </View>
@@ -75,12 +78,10 @@ export function SpaceCard({
                 paddingHorizontal: 10,
                 paddingVertical: 4,
                 borderRadius: 999,
-                backgroundColor: Theme.colors.accentYellow
+                backgroundColor: T.colors.blue1
               }}
             >
-              <Text style={{ fontSize: 12, fontWeight: "800", color: Theme.colors.text }}>
-                Join / Unlock
-              </Text>
+              <Text style={{ fontSize: 12, fontWeight: "800", color: "white" }}>Join / Unlock</Text>
             </Pressable>
           ) : null}
         </View>

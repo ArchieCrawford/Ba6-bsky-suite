@@ -1,0 +1,7 @@
+{
+  "name": "BA6 Groups",
+  "revisionLabel": "Fix persistent 404 errors with graceful migration handling",
+  "description": "",
+  "mode": "Universal",
+  "exportDate": "2026-02-17T17:51:41.898Z"
+}
